@@ -1,0 +1,2703 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>현장 공기구 통합 관리대장 [아태 / KIFT]</title>
+    <!-- SheetJS CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    
+    <!-- Firebase SDK (Realtime Database & Firestore 연동) -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+    <!-- 🛡️ 최상단 강제 보안 스크립트 (우클릭, F12, 소스보기 즉시 차단) -->
+    <script>
+      window.addEventListener('contextmenu', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          return false;
+      }, true);
+
+      window.addEventListener('keydown', function(e) {
+          if (
+              e.key === 'F12' || 
+              e.keyCode === 123 ||
+              (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'i' || e.key === 'J' || e.key === 'j' || e.key === 'C' || e.key === 'c')) || 
+              (e.ctrlKey && (e.key === 'U' || e.key === 'u' || e.key === 'S' || e.key === 's'))
+          ) {
+              e.preventDefault();
+              e.stopPropagation();
+              return false;
+          }
+      }, true);
+    </script>
+
+    <style>
+        * { 
+            box-sizing: border-box; 
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+        }
+        input, select, textarea {
+            -webkit-user-select: auto;
+            -moz-user-select: auto;
+            -ms-user-select: auto;
+            user-select: auto;
+        }
+        body { 
+            font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif; 
+            margin: 0; 
+            padding: 0; 
+            background-color: #f8fafc; 
+            color: #333; 
+        }
+
+        /* 🔒 과거 백업 조회 읽기 전용 알림 배너 */
+        #backup-readonly-banner {
+            display: none;
+            background-color: #f59e0b;
+            color: #ffffff;
+            padding: 12px 20px;
+            font-weight: bold;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        /* 🔑 비밀번호 접속 인증 모달 스타일 */
+        #login-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background-color: #0f172a;
+            z-index: 1000000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .login-box {
+            background: white;
+            padding: 30px 40px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+            text-align: center;
+            width: 350px;
+        }
+        .login-box h2 {
+            margin-top: 0;
+            font-size: 20px;
+            color: #0f172a;
+            border-bottom: none;
+            justify-content: center;
+        }
+        .login-box p {
+            font-size: 13px;
+            color: #64748b;
+            margin-bottom: 20px;
+        }
+        .login-box input[type="password"] {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            font-size: 15px;
+            margin-bottom: 15px;
+            text-align: center;
+            letter-spacing: 3px;
+        }
+        .login-box button {
+            width: 100%;
+            padding: 10px;
+            border: none;
+            border-radius: 6px;
+            background-color: #3b82f6;
+            color: white;
+            font-weight: bold;
+            font-size: 15px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .login-box button:hover {
+            background-color: #2563eb;
+        }
+
+        /* 🔒 파이어베이스 원격 잠금 화면 레이어 */
+        #system-lock-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background-color: #0f172a;
+            color: white;
+            z-index: 999999;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 20px;
+        }
+        #system-lock-overlay h1 { font-size: 36px; color: #ef4444; margin-bottom: 15px; }
+        #system-lock-overlay p { font-size: 18px; color: #cbd5e1; line-height: 1.6; max-width: 600px; }
+
+        .header { 
+            background-color: #0f172a; 
+            color: white; 
+            padding: 15px 25px; 
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .header h1 { 
+            margin: 0; 
+            font-size: 20px; 
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .team-selector label {
+            font-size: 14px;
+            color: #cbd5e1;
+        }
+        .team-selector select {
+            padding: 8px 12px;
+            border-radius: 6px;
+            border: none;
+            font-weight: bold;
+            font-size: 14px;
+            background-color: #3b82f6;
+            color: white;
+            cursor: pointer;
+        }
+        .btn-action {
+            padding: 8px 14px;
+            border-radius: 6px;
+            border: none;
+            font-weight: bold;
+            font-size: 13px;
+            cursor: pointer;
+            transition: 0.2s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            white-space: nowrap;
+        }
+        .btn-save { background-color: #10b981; color: white; }
+        .btn-save:hover { background-color: #059669; }
+        .btn-gsheet-load { background-color: #8b5cf6; color: white; }
+        .btn-gsheet-load:hover { background-color: #7c3aed; }
+        .btn-excel-out { background-color: #16a34a; color: white; }
+        .btn-excel-out:hover { background-color: #15803d; }
+        .btn-excel-in { background-color: #0284c7; color: white; }
+        .btn-excel-in:hover { background-color: #0369a1; }
+        .btn-export { background-color: #f59e0b; color: white; }
+        .btn-export:hover { background-color: #d97706; }
+        .btn-import { background-color: #8b5cf6; color: white; }
+        .btn-import:hover { background-color: #7c3aed; }
+        .btn-print { background-color: #6366f1; color: white; }
+        .btn-print:hover { background-color: #4f46e5; }
+        .btn-pdf { background-color: #dc2626; color: white; }
+        .btn-pdf:hover { background-color: #b91c1c; }
+        .btn-delete-multi { background-color: #ef4444; color: white; }
+        .btn-delete-multi:hover { background-color: #dc2626; }
+        .btn-restore { background-color: #6366f1; color: white; }
+        .btn-restore:hover { background-color: #4f46e5; }
+        .btn-loss { background-color: #e11d48; color: white; }
+        .btn-loss:hover { background-color: #be123c; }
+        .btn-report { background-color: #0284c7; color: white; }
+        .btn-report:hover { background-color: #0369a1; }
+
+        .container { 
+            display: flex; 
+            height: calc(100vh - 60px); 
+        }
+        .sidebar { 
+            width: 220px; 
+            background-color: #1e293b; 
+            color: white; 
+            display: flex; 
+            flex-direction: column; 
+            flex-shrink: 0;
+        }
+        .sidebar button { 
+            background: none; 
+            border: none; 
+            color: #cbd5e1; 
+            padding: 18px 20px; 
+            text-align: left; 
+            cursor: pointer; 
+            font-size: 15px; 
+            transition: 0.3s; 
+            border-left: 4px solid transparent;
+        }
+        .sidebar button:hover, .sidebar button.active { 
+            background-color: #0f172a; 
+            border-left: 4px solid #3b82f6;
+            color: white;
+            font-weight: bold;
+        }
+        .main-content { 
+            flex-grow: 1; 
+            padding: 30px; 
+            overflow-y: auto; 
+            background-color: #fff; 
+            margin: 20px; 
+            border-radius: 10px; 
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05); 
+        }
+        .tab-content { 
+            display: none; 
+            animation: fadeIn 0.3s ease;
+        }
+        .tab-content.active { 
+            display: block; 
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        h2 {
+            margin-top: 0;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 10px;
+            color: #0f172a;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .team-badge {
+            background-color: #e0f2fe;
+            color: #0369a1;
+            font-size: 14px;
+            padding: 4px 12px;
+            border-radius: 20px;
+        }
+        .search-bar-container {
+            margin-top: 15px;
+            margin-bottom: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .search-input {
+            width: 250px;
+            padding: 9px 12px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin-top: 10px; 
+        }
+        th, td { 
+            border: 1px solid #e2e8f0; 
+            padding: 12px; 
+            text-align: center; 
+            vertical-align: middle;
+            font-size: 14px;
+        }
+        th { 
+            background-color: #f1f5f9; 
+            font-weight: bold; 
+            color: #475569;
+        }
+        tbody tr:hover {
+            background-color: #f8fafc;
+        }
+        .item-link {
+            color: #0284c7;
+            text-decoration: underline;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .item-link:hover {
+            color: #0369a1;
+        }
+        
+        .action-cell {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .checkbox-cell { width: 40px; }
+        .row-checkbox {
+            width: 18px; height: 18px; cursor: pointer; accent-color: #3b82f6;
+        }
+
+        .btn-delete {
+            background-color: #ef4444; color: white; border: none; padding: 5px 10px;
+            border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; transition: 0.2s;
+        }
+        .btn-delete:hover { background-color: #dc2626; }
+
+        .btn-edit {
+            background-color: #64748b; color: white; border: none; padding: 5px 10px;
+            border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; transition: 0.2s;
+        }
+        .btn-edit:hover { background-color: #475569; }
+        
+        .dashboard-cards { 
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); 
+            gap: 20px; margin-bottom: 30px; 
+        }
+        .card { 
+            background-color: #f8fafc; padding: 20px; border-radius: 10px; 
+            border: 1px solid #e2e8f0; text-align: center; font-size: 15px; font-weight: bold; color: #64748b;
+        }
+        .card span { display: block; font-size: 32px; color: #0f172a; margin-top: 10px; }
+        
+        .status-badge {
+            padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: bold; display: inline-block;
+        }
+        .status-good { background-color: #dcfce7; color: #166534; }
+        .status-repair { background-color: #fef3c7; color: #92400e; }
+        .status-disposed { background-color: #fee2e2; color: #991b1b; }
+        .status-partial-loss { background-color: #f3e8ff; color: #7e22ce; }
+        
+        .badge-corp-at { background-color: #e0f2fe; color: #0369a1; padding: 3px 8px; border-radius: 4px; font-weight: bold; font-size: 12px; }
+        .badge-corp-kift { background-color: #fef3c7; color: #92400e; padding: 3px 8px; border-radius: 4px; font-weight: bold; font-size: 12px; }
+        
+        .badge-out { background-color: #dbeafe; color: #1e40af; padding: 4px 8px; border-radius: 4px; font-weight: bold; }
+        .badge-in { background-color: #dcfce7; color: #166534; padding: 4px 8px; border-radius: 4px; font-weight: bold; }
+        .badge-loss { background-color: #ffe4e6; color: #9f1239; padding: 4px 8px; border-radius: 4px; font-weight: bold; }
+
+        .quick-transaction-bar {
+            background-color: #f8fafc; padding: 15px; border-radius: 8px; 
+            border: 1px solid #cbd5e1; margin-bottom: 15px; display: flex; flex-direction: column; gap: 10px;
+        }
+        .quick-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        .quick-input-balanced {
+            padding: 9px 12px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 14px; height: 40px; background-color: #fff;
+        }
+
+        .corp-sub-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .corp-tab-btn {
+            padding: 8px 16px;
+            border-radius: 6px;
+            border: 1px solid #cbd5e1;
+            background-color: #f1f5f9;
+            color: #475569;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .corp-tab-btn.active {
+            background-color: #3b82f6;
+            color: white;
+            border-color: #3b82f6;
+        }
+
+        .tool-card-wrapper {
+            display: flex;
+            background: white;
+            border: 2px solid #0f172a;
+            border-radius: 8px;
+            max-width: 650px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            outline: none;
+        }
+        .tool-card-table {
+            width: 60%;
+            border-collapse: collapse;
+        }
+        .tool-card-table th {
+            background-color: #f1f5f9;
+            border: 1px solid #cbd5e1;
+            padding: 10px;
+            width: 35%;
+            font-size: 13px;
+            color: #334155;
+            text-align: center;
+        }
+        .tool-card-table td {
+            border: 1px solid #cbd5e1;
+            padding: 10px;
+            font-size: 14px;
+            font-weight: bold;
+            color: #0f172a;
+            text-align: center;
+            background-color: #fff;
+        }
+        .tool-card-img-box {
+            width: 40%;
+            border-left: 2px solid #0f172a;
+            background-color: #10b981; 
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            padding: 10px;
+            cursor: pointer;
+        }
+        .tool-card-img-box img {
+            max-width: 100%;
+            max-height: 180px;
+            object-fit: contain;
+            border-radius: 4px;
+        }
+        .img-upload-label {
+            margin-top: 8px;
+            background: rgba(15, 23, 42, 0.8);
+            color: white;
+            padding: 4px 10px;
+            font-size: 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            display: inline-block;
+        }
+        .img-upload-label:hover {
+            background: #0f172a;
+        }
+
+        .loss-report-modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(15, 23, 42, 0.7);
+            z-index: 10000;
+            align-items: center;
+            justify-content: center;
+            overflow-y: auto;
+            padding: 10px 0;
+        }
+        .loss-report-sheet {
+            background: white;
+            width: 210mm;
+            max-height: 285mm;
+            padding: 12mm 15mm;
+            box-shadow: 0 0 20px rgba(0,0,0,0.3);
+            position: relative;
+            box-sizing: border-box;
+            color: #000;
+            margin: auto;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        .report-header-table, .report-content-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 8px;
+        }
+        .report-header-table td {
+            border: none;
+            vertical-align: middle;
+        }
+        .report-content-table th, .report-content-table td {
+            border: 1px solid #000;
+            padding: 6px 10px;
+            text-align: center;
+            font-size: 12px;
+        }
+        .report-content-table th {
+            background-color: #f1f5f9;
+        }
+
+        .approval-box {
+            border-collapse: collapse;
+            width: 220px !important;
+            table-layout: fixed !important;
+            float: right;
+            margin-bottom: 0;
+        }
+        .approval-box th, .approval-box td {
+            border: 1px solid #000 !important;
+            text-align: center !important;
+            font-size: 11px !important;
+            padding: 3px !important;
+        }
+        .approval-box th { background-color: #f8fafc; font-weight: bold; }
+        .approval-td-box {
+            height: 50px !important;
+        }
+
+        .report-img-box {
+            width: 100%;
+            height: 100%;
+            min-height: 250px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            outline: none;
+            position: relative;
+        }
+        .report-img-box:focus {
+            background-color: #f0fdf4;
+        }
+
+        .modal-overlay {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(3px); z-index: 9999;
+            align-items: center; justify-content: center;
+        }
+        .modal-content {
+            background: white; padding: 25px; border-radius: 12px; width: 90%;
+            max-width: 950px; max-height: 80vh; overflow-y: auto; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);
+        }
+
+        .print-header-info { display: none; }
+        .print-header-info h1 { margin: 0 0 6px 0; font-size: 20px; color: #0f172a; }
+        .print-header-info p { margin: 0; font-size: 12px; color: #64748b; }
+
+        /* 🖨️ 인쇄 및 PDF 저장 전용 CSS (다중 페이지 자동 분할 적용) */
+        @media print {
+            * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+            @page {
+                size: A4 portrait;
+                margin: 10mm !important;
+            }
+            html, body {
+                width: 100% !important;
+                height: auto !important;
+                overflow: visible !important;
+                background: #fff !important;
+            }
+
+            .container {
+                display: block !important;
+                height: auto !important;
+            }
+
+            .sidebar, .header, .btn-action, .corp-sub-tabs, .search-bar-container, .quick-transaction-bar, .no-print, #backup-readonly-banner {
+                display: none !important;
+            }
+
+            .main-content {
+                margin: 0 !important;
+                padding: 0 !important;
+                width: 100% !important;
+                box-shadow: none !important;
+                overflow: visible !important;
+                height: auto !important;
+            }
+
+            .tab-content {
+                display: none !important;
+            }
+            .tab-content.active {
+                display: block !important;
+            }
+
+            table {
+                width: 100% !important;
+                table-layout: fixed !important;
+                word-break: break-all !important;
+                font-size: 10pt !important;
+                page-break-inside: auto !important;
+            }
+
+            tr {
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+                page-break-after: auto !important;
+            }
+
+            thead {
+                display: table-header-group !important;
+            }
+
+            th, td {
+                padding: 6px 4px !important;
+                border: 1px solid #333 !important;
+            }
+
+            th {
+                background-color: #f1f5f9 !important;
+                color: #000 !important;
+            }
+
+            .status-badge, .badge-corp-at, .badge-corp-kift, .badge-out, .badge-in, .badge-loss {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+
+            body.is-printing-report * { visibility: hidden; }
+            body.is-printing-report .loss-report-sheet, body.is-printing-report .loss-report-sheet * { visibility: visible; }
+            body.is-printing-report .loss-report-modal {
+                position: absolute; left: 0; top: 0; background: white; display: flex !important; padding: 0; overflow: hidden; width: 100%; height: 100%;
+            }
+            body.is-printing-report .loss-report-sheet {
+                box-shadow: none; 
+                width: 100% !important; 
+                height: 100% !important;
+                max-height: 275mm !important;
+                padding: 5mm 8mm !important; 
+                margin: 0 !important; 
+                overflow: hidden !important;
+                page-break-after: avoid !important; 
+                page-break-inside: avoid !important;
+            }
+
+            body:not(.is-printing-report) .print-header-info { display: block !important; margin-bottom: 15px; border-bottom: 2px solid #000; padding-bottom: 10px; }
+        }
+    </style>
+</head>
+<body oncontextmenu="return false;" onselectstart="return false;" ondragstart="return false;">
+
+<!-- 🔑 비밀번호 접속 인증 오버레이 모달 -->
+<div id="login-overlay">
+    <div class="login-box">
+        <h2>🔒 시스템 접속 인증</h2>
+        <p>통합 관리대장 접근을 위해 비밀번호를 입력하세요.</p>
+        <input type="password" id="sys-pass-input" placeholder="비밀번호 입력" onkeyup="if(event.key==='Enter') checkSystemPassword()">
+        <button onclick="checkSystemPassword()">접속하기</button>
+    </div>
+</div>
+
+<!-- 🔒 원격 차단 화면 레이어 -->
+<div id="system-lock-overlay">
+    <h1>🚨 시스템 접근 차단 안내</h1>
+    <p>현재 시스템 점검 또는 관리자 잠금 설정으로 인해 접속이 제한되었습니다.<br>관리자에게 문의하시기 바랍니다.</p>
+</div>
+
+<!-- 🔒 과거 백업 조회 시 나타나는 경고 및 복귀 배너 -->
+<div id="backup-readonly-banner" class="no-print">
+    <span>⚠️ 현재 [과거 백업 데이터 이력 조회 중] 입니다. 클라우드 자동 덮어쓰기가 차단되었습니다. (인쇄 및 PDF 출력 가능)</span>
+    <button onclick="exitReadOnlyMode()" class="btn-action" style="background:#ffffff; color:#d97706; padding:4px 12px;">🔄 실시간 클라우드 모드로 복귀</button>
+</div>
+
+<div class="header">
+    <h1>🛠️ 현장 공기구 통합 관리대장 [아태 / KIFT]</h1>
+    <div class="header-controls">
+        <div class="team-selector">
+            <label for="current-team-select">👤 접속 팀:</label>
+            <select id="current-team-select" onchange="changeTeam()">
+                <option value="ALL">전체 (총괄 관리자)</option>
+                <option value="전기팀">전기팀</option>
+                <option value="소방팀">소방팀</option>
+                <option value="설비팀">설비팀</option>
+                <option value="건축팀">건축팀</option>
+                <option value="점검팀">점검팀</option>
+                <option value="냉동">냉동</option>
+                <option value="운송">운송</option>
+                <option value="미화팀">미화팀</option>
+            </select>
+        </div>
+        <button class="btn-action btn-save" id="btn_save_main" onclick="saveDataToGoogleSheet()">💾 데이터 저장</button>
+        <button class="btn-action btn-gsheet-load" onclick="loadDataFromGoogleSheet()">📂 데이터 불러오기</button>
+        <button class="btn-action btn-export" onclick="exportBackup()">📂 백업 (다운로드)</button>
+        <button class="btn-action btn-import" onclick="document.getElementById('file-input').click()">📥 백업 복원 / 이력 조회</button>
+        <input type="file" id="file-input" style="display:none;" accept=".json" onchange="importBackup(event)">
+    </div>
+</div>
+
+<div class="container">
+    <div class="sidebar">
+        <button class="tab-link active" onclick="openTab(event, 'Dashboard')">📊 대시보드</button>
+        <button class="tab-link" onclick="openTab(event, 'Inventory')">📋 공기구 보유 목록</button>
+        <button class="tab-link" onclick="openTab(event, 'History')">📜 반출입 및 점검 이력</button>
+        <button class="tab-link" onclick="openTab(event, 'PeriodSearch')">📅 기간별 종합 검색</button>
+    </div>
+
+    <div class="main-content">
+        <!-- 인쇄 / PDF 보고서 양식 헤더 -->
+        <div class="print-header-info">
+            <h1 id="print-title">현장 공기구 관리 보고서</h1>
+            <p id="print-date-info">출력일자: 2026-08-05 | 접속 팀: 전체</p>
+        </div>
+
+        <!-- 1. 대시보드 -->
+        <div id="Dashboard" class="tab-content active">
+            <h2>
+                대시보드 요약 <span class="team-badge" id="dash-team-badge">전체 보기</span>
+                <div style="display: flex; gap: 6px;">
+                    <button class="btn-action btn-print" onclick="printCurrentTab('대시보드 요약 보고서')">🖨️ 인쇄</button>
+                    <button class="btn-action btn-pdf" onclick="printCurrentTab('대시보드 요약 보고서')">📄 PDF 저장</button>
+                </div>
+            </h2>
+            <div class="dashboard-cards">
+                <div class="card">등록 공기구 수 <span id="dash-total-items">0</span></div>
+                <div class="card">정상 가동중 <span id="dash-good-items" style="color: #16a34a;">0</span></div>
+                <div class="card">수리/점검중 <span id="dash-repair-items" style="color: #d97706;">0</span></div>
+            </div>
+            
+            <h3>🛠️ 통합 관리 안내</h3>
+            <div style="background-color: #f1f5f9; padding: 15px; border-radius: 8px; border-left: 5px solid #3b82f6; font-size: 14px; line-height: 1.6;">
+                - <strong>클라우드 파이어스토어 실시간 연동:</strong> 다른 PC에서 추가/수정/삭제 및 이미지 등록 시 화면이 실시간으로 동기화됩니다.<br>
+                - <strong>과거 백업본 안전 조회:</strong> 백업 파일을 열면 클라우드 자동 덮어쓰기가 방지되는 [읽기 모드]로 전환되어 과거 이력을 안전하게 열람/출력할 수 있습니다.
+            </div>
+        </div>
+
+        <!-- 2. 공기구 목록 -->
+        <div id="Inventory" class="tab-content">
+            <h2>
+                공기구 보유 목록 <span class="team-badge" id="inv-team-badge">전체 보기</span>
+                <div style="display: flex; gap: 6px;">
+                    <button class="btn-action btn-print" onclick="printCurrentTab('공기구 보유 목록 보고서')">🖨️ 인쇄</button>
+                    <button class="btn-action btn-pdf" onclick="printCurrentTab('공기구 보유 목록 보고서')">📄 PDF 저장</button>
+                </div>
+            </h2>
+            
+            <div class="corp-sub-tabs" style="background-color: #f1f5f9; padding: 12px; border-radius: 8px; border: 1px solid #cbd5e1;">
+                <div>
+                    🏢 <strong>팀 선택:</strong>
+                    <select id="filter-team-inv" class="quick-input-balanced" style="height: 38px; width: 160px;" onchange="renderApp()">
+                        <option value="ALL">전체 팀</option>
+                        <option value="전기팀">전기팀</option>
+                        <option value="소방팀">소방팀</option>
+                        <option value="설비팀">설비팀</option>
+                        <option value="건축팀">건축팀</option>
+                        <option value="점검팀">점검팀</option>
+                        <option value="냉동">냉동</option>
+                        <option value="운송">운송</option>
+                        <option value="미화팀">미화팀</option>
+                    </select>
+                </div>
+                <div style="display: flex; gap: 6px;">
+                    <button class="corp-tab-btn active" onclick="setCorpFilter('ALL', 'inv', this)">전체보기</button>
+                    <button class="corp-tab-btn" onclick="setCorpFilter('아태', 'inv', this)">🟦 아태보기</button>
+                    <button class="corp-tab-btn" onclick="setCorpFilter('KIFT', 'inv', this)">🟧 KIFT보기</button>
+                </div>
+            </div>
+
+            <div class="search-bar-container">
+                <div>
+                    🔍 <strong>검색:</strong>
+                    <input type="text" id="inventory-search" class="search-input" placeholder="공기구명 또는 관리번호 검색..." onkeyup="renderApp()">
+                </div>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                    <button class="btn-action btn-delete-multi" onclick="deleteSelectedItems()">🗑️ 선택 삭제</button>
+                    <button class="btn-action btn-save" onclick="addNewItem()">➕ 공기구 등록</button>
+                    <button class="btn-action btn-restore" onclick="openInvRestoreModal()">↺ 삭제함 복원</button>
+                    <button class="btn-action btn-excel-in" onclick="document.getElementById('excel-file-input').click()">📊 엑셀 업로드</button>
+                    <input type="file" id="excel-file-input" style="display:none;" accept=".xlsx, .xls" onchange="importFromExcel(event)">
+                    <button class="btn-action btn-excel-out" onclick="exportToExcel()">📊 엑셀 다운로드</button>
+                </div>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th class="checkbox-cell"><input type="checkbox" id="selectAllCheckbox" class="row-checkbox" onclick="toggleAllCheckboxes(this)"></th>
+                        <th>법인</th>
+                        <th>담당 팀</th>
+                        <th>관리번호</th>
+                        <th>공기구명 (클릭 시 상세카드)</th>
+                        <th>규격 / 사양</th>
+                        <th>수량</th>
+                        <th>제조사</th>
+                        <th>구입일자</th>
+                        <th>상태</th>
+                        <th class="col-action" style="text-align: right; padding-right: 20px;">관리</th>
+                    </tr>
+                </thead>
+                <tbody id="inventory-body"></tbody>
+            </table>
+        </div>
+
+        <!-- 3. 반출입 및 점검 이력 -->
+        <div id="History" class="tab-content">
+            <h2>
+                반출입 및 점검 이력 <span class="team-badge" id="hist-team-badge">전체 보기</span>
+                <div style="display: flex; gap: 6px;">
+                    <button class="btn-action btn-print" onclick="printCurrentTab('공기구 반출입 및 점검 이력 보고서')">🖨️ 인쇄</button>
+                    <button class="btn-action btn-pdf" onclick="printCurrentTab('공기구 반출입 및 점검 이력 보고서')">📄 PDF 저장</button>
+                </div>
+            </h2>
+
+            <!-- 공기구 상세 관리 카드 및 버튼 영역 -->
+            <div id="tool-detail-card-container" style="display:none; margin-bottom: 25px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; max-width: 650px; margin-bottom: 8px;">
+                    <h3 style="margin: 0; font-size: 16px; color: #0f172a;">📌 공기구 상세 관리 카드 <span style="font-size:11px; color:#3b82f6; font-weight:normal;">(💡 카드 클릭 후 Ctrl+V 사진 붙여넣기 가능)</span></h3>
+                    <button class="btn-action" style="background-color:#0284c7; color:white;" onclick="clearHistoryFilter()">🔙 전체 이력 및 목록으로</button>
+                </div>
+                
+                <div class="tool-card-wrapper" id="tool-paste-box" tabindex="0">
+                    <table class="tool-card-table">
+                        <tr>
+                            <th>관 리 번 호</th>
+                            <td id="card-code">-</td>
+                        </tr>
+                        <tr>
+                            <th>품 명</th>
+                            <td id="card-name">-</td>
+                        </tr>
+                        <tr>
+                            <th>규 격</th>
+                            <td id="card-spec">-</td>
+                        </tr>
+                        <tr>
+                            <th>제 조 사</th>
+                            <td id="card-maker">-</td>
+                        </tr>
+                        <tr>
+                            <th>수 량</th>
+                            <td id="card-qty">-</td>
+                        </tr>
+                        <tr>
+                            <th>구 입 일</th>
+                            <td id="card-date">-</td>
+                        </tr>
+                        <tr>
+                            <th>상 태</th>
+                            <td id="card-status">-</td>
+                        </tr>
+                    </table>
+                    <div class="tool-card-img-box" onclick="checkAndUploadToolImg()">
+                        <img id="card-tool-img" src="" alt="공기구 사진 없음" style="display:none;">
+                        <span id="card-no-img" style="color: white; font-size: 13px; text-align:center;">등록된 사진 없음<br><span style="font-size:10px; opacity:0.9;">(클릭 또는 Ctrl+V 가능)</span></span>
+                        <span class="img-upload-label">📷 파일 선택</span>
+                        <input type="file" id="tool-img-input" accept="image/*" style="display:none;" onchange="uploadToolImage(event)">
+                    </div>
+                </div>
+
+                <!-- 저장된 손망실 보고서 목록 조회/출력 영역 -->
+                <div style="max-width: 650px; margin-top: 10px; background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #cbd5e1;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <div style="font-weight: bold; font-size: 13.5px; color: #0f172a;">📋 저장된 손망실 보고서 목록 (회차별 인쇄)</div>
+                        <button class="btn-action btn-restore" style="padding: 3px 8px; font-size: 11.5px;" onclick="openReportRestoreModal()">↺ 삭제된 보고서 보관함</button>
+                    </div>
+                    <div id="saved-reports-list" style="display: flex; flex-direction: column; gap: 6px;">
+                        <span style="font-size: 13px; color: #64748b;">작성 및 저장된 보고서가 없습니다. 손망실 처리 후 [보고서 내용 저장]을 눌러주세요.</span>
+                    </div>
+                </div>
+
+                <div style="max-width: 650px; margin-top: 10px; display: flex; justify-content: flex-end; gap: 8px;">
+                    <button class="btn-action btn-loss" onclick="processLossItem()">🚨 손망실 처리 (구분 선택 및 자동 차감)</button>
+                    <button class="btn-action btn-report" onclick="openLossReportModalNew()">🖨️ 신규 손망실 보고서 작성</button>
+                </div>
+            </div>
+
+            <div class="corp-sub-tabs" style="background-color: #f1f5f9; padding: 12px; border-radius: 8px; border: 1px solid #cbd5e1;">
+                <div>
+                    🏢 <strong>팀 선택:</strong>
+                    <select id="filter-team-hist" class="quick-input-balanced" style="height: 38px; width: 160px;" onchange="renderHistory()">
+                        <option value="ALL">전체 팀</option>
+                        <option value="전기팀">전기팀</option>
+                        <option value="소방팀">소방팀</option>
+                        <option value="설비팀">설비팀</option>
+                        <option value="건축팀">건축팀</option>
+                        <option value="점검팀">점검팀</option>
+                        <option value="냉동">냉동</option>
+                        <option value="운송">운송</option>
+                        <option value="미화팀">미화팀</option>
+                    </select>
+                </div>
+                <div style="display: flex; gap: 6px;">
+                    <button class="corp-tab-btn active" onclick="setCorpFilter('ALL', 'hist', this)">전체보기</button>
+                    <button class="corp-tab-btn" onclick="setCorpFilter('아태', 'hist', this)">🟦 아태보기</button>
+                    <button class="corp-tab-btn" onclick="setCorpFilter('KIFT', 'hist', this)">🟧 KIFT보기</button>
+                </div>
+            </div>
+
+            <div class="quick-transaction-bar">
+                <div style="font-weight: bold; color: #0f172a; margin-bottom: 2px;">⚡ 공기구 반출 / 반납 / 점검 등록</div>
+                <div class="quick-row">
+                    <input type="date" id="quick-trans-date" class="quick-input-balanced" style="width: 145px;">
+                    <select id="quick-trans-item" class="quick-input-balanced" style="flex-grow: 2; min-width: 200px;"></select>
+                    <select id="quick-trans-type" class="quick-input-balanced" style="width: 120px;">
+                        <option value="반출">반출 (-)</option>
+                        <option value="반납">반납 (+)</option>
+                        <option value="정기점검">정기점검</option>
+                    </select>
+                    <input type="text" id="quick-trans-worker" class="quick-input-balanced" style="flex-grow: 1; min-width: 200px;" placeholder="사용자 / 점검자 / 비고">
+                    <button class="btn-action btn-save" style="height: 40px; padding: 0 24px;" onclick="submitQuickTransaction()">✅ 등록</button>
+                </div>
+            </div>
+
+            <div class="search-bar-container" style="background-color: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0;">
+                <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                    <div>
+                        📅 <strong>정렬:</strong>
+                        <select id="sort-date" class="quick-input-balanced" style="height: 38px; width: 130px;" onchange="renderHistory()">
+                            <option value="desc">최신순</option>
+                            <option value="asc">과거순</option>
+                        </select>
+                    </div>
+                    <div>
+                        🔄 <strong>구분:</strong>
+                        <select id="filter-type" class="quick-input-balanced" style="height: 38px; width: 130px;" onchange="renderHistory()">
+                            <option value="all">전체</option>
+                            <option value="반출">반출만</option>
+                            <option value="반납">반납만</option>
+                            <option value="정기점검">점검만</option>
+                            <option value="손망실">손망실만</option>
+                        </select>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 5px;">
+                    🔍 <input type="text" id="history-search" class="search-input" placeholder="공기구명, 관리번호, 사용자 검색..." onkeyup="renderHistory()">
+                    <button class="btn-action btn-delete-multi" onclick="deleteSelectedHistory()">🗑️ 선택 삭제</button>
+                    <button class="btn-action btn-restore" onclick="openRestoreModal()">↺ 삭제이력 복원</button>
+                </div>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th class="checkbox-cell"><input type="checkbox" id="selectAllHistoryCheckbox" class="row-checkbox" onclick="toggleAllHistoryCheckboxes(this)"></th>
+                        <th>일시</th>
+                        <th>법인</th>
+                        <th>담당 팀</th>
+                        <th>구분</th>
+                        <th>관리번호</th>
+                        <th>공기구명</th>
+                        <th>사용자 / 점검내용</th>
+                        <th class="col-action" style="text-align: right; padding-right: 20px;">관리</th>
+                    </tr>
+                </thead>
+                <tbody id="history-body"></tbody>
+            </table>
+        </div>
+
+        <!-- 4. 기간별 종합 검색 -->
+        <div id="PeriodSearch" class="tab-content">
+            <h2>
+                기간별 종합 검색 <span class="team-badge" id="period-team-badge">전체 보기</span>
+                <div style="display: flex; gap: 6px;">
+                    <button class="btn-action btn-print" onclick="printCurrentTab('기간별 종합 검색 보고서')">🖨️ 인쇄</button>
+                    <button class="btn-action btn-pdf" onclick="printCurrentTab('기간별 종합 검색 보고서')">📄 PDF 저장</button>
+                </div>
+            </h2>
+
+            <div class="corp-sub-tabs" style="background-color: #f1f5f9; padding: 12px; border-radius: 8px; border: 1px solid #cbd5e1; margin-bottom: 15px;">
+                <div>
+                    🏢 <strong>팀 선택:</strong>
+                    <select id="filter-team-period" class="quick-input-balanced" style="height: 38px; width: 160px;">
+                        <option value="ALL">전체 팀</option>
+                        <option value="전기팀">전기팀</option>
+                        <option value="소방팀">소방팀</option>
+                        <option value="설비팀">설비팀</option>
+                        <option value="건축팀">건축팀</option>
+                        <option value="점검팀">점검팀</option>
+                        <option value="냉동">냉동</option>
+                        <option value="운송">운송</option>
+                        <option value="미화팀">미화팀</option>
+                    </select>
+                </div>
+                <div style="display: flex; gap: 6px;">
+                    <button class="corp-tab-btn active" onclick="setCorpFilter('ALL', 'period', this)">전체보기</button>
+                    <button class="corp-tab-btn" onclick="setCorpFilter('아태', 'period', this)">🟦 아태보기</button>
+                    <button class="corp-tab-btn" onclick="setCorpFilter('KIFT', 'period', this)">🟧 KIFT보기</button>
+                </div>
+            </div>
+
+            <div class="search-bar-container" style="background-color: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #cbd5e1;">
+                <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; width: 100%;">
+                    <div>📅 <strong>시작일:</strong> <input type="date" id="search-start-date" class="quick-input-balanced" style="width: 150px;"></div>
+                    <div>📅 <strong>종료일:</strong> <input type="date" id="search-end-date" class="quick-input-balanced" style="width: 150px;"></div>
+                    <div>
+                        🔄 <strong>구분:</strong>
+                        <select id="search-period-type" class="quick-input-balanced" style="width: 120px;">
+                            <option value="all">전체</option>
+                            <option value="반출">반출</option>
+                            <option value="반납">반납</option>
+                            <option value="정기점검">정기점검</option>
+                            <option value="손망실">손망실</option>
+                        </select>
+                    </div>
+                    <div style="flex-grow: 1;">
+                        🔍 <input type="text" id="search-period-keyword" class="quick-input-balanced" style="width: 100%;" placeholder="공기구명, 관리번호 검색...">
+                    </div>
+                    <div><button class="btn-action btn-save" style="height: 40px; padding: 0 20px;" onclick="renderPeriodSearch()">검색 실행</button></div>
+                </div>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>일시</th>
+                        <th>법인</th>
+                        <th>담당 팀</th>
+                        <th>구분</th>
+                        <th>관리번호</th>
+                        <th>공기구명</th>
+                        <th>사용자 / 비고</th>
+                    </tr>
+                </thead>
+                <tbody id="period-search-body">
+                    <tr><td colspan="7" style="color:#94a3b8; padding:30px;">조회 조건을 설정한 후 검색 버튼을 눌러주세요.</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- 📄 손망실 보고서 모달 -->
+<div id="lossReportModal" class="loss-report-modal">
+    <div class="loss-report-sheet">
+        <div>
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px;">
+                <div>
+                    <span style="font-size: 12px; color: #333;" id="report-corp-name">아태산업개발주식회사</span>
+                    <h2 style="margin: 4px 0 0 0; font-size: 22px; border:none; padding:0; letter-spacing: 2px;">손 망 실 보 고 서</h2>
+                </div>
+                <table class="approval-box">
+                    <tr>
+                        <th rowspan="2" style="width: 25px; font-size:11px;">결<br>재</th>
+                        <th style="width: 65px;">담당</th>
+                        <th style="width: 65px;">검토</th>
+                        <th style="width: 65px;">확인</th>
+                    </tr>
+                    <tr>
+                        <td class="approval-td-box"></td>
+                        <td class="approval-td-box"></td>
+                        <td class="approval-td-box"></td>
+                    </tr>
+                </table>
+            </div>
+
+            <table class="report-header-table" style="margin-bottom: 8px;">
+                <tr>
+                    <td style="text-align: left; font-size: 12px;"><strong>해당 부서:</strong> <span id="report-team-name">소방팀</span></td>
+                    <td style="text-align: right; font-size: 12px;"><strong>문서번호:</strong> <span id="report-doc-no">-</span></td>
+                </tr>
+            </table>
+
+            <div style="font-weight: bold; margin-bottom: 4px; font-size: 12px;">1. 사고내역</div>
+            <table class="report-content-table">
+                <tr>
+                    <th style="width: 20%;">구 분</th>
+                    <td style="text-align: left; padding-left: 15px;" id="report-type-checks">
+                        분실( [ ] ), 훼손 수리가능( [ ] ), 훼손 수리불가능( [ ] ), 폐기( [ O ] )
+                    </td>
+                </tr>
+                <tr>
+                    <th>발생일시</th>
+                    <td style="text-align: left; padding-left: 15px;" id="report-loss-date">2026년 ___월 ___일</td>
+                </tr>
+                <tr>
+                    <th>발생장소</th>
+                    <td style="text-align: left; padding-left: 15px;">현장 현업 사무실 / 작업장</td>
+                </tr>
+            </table>
+
+            <div style="font-weight: bold; margin-bottom: 4px; font-size: 12px;">2. 망실 및 훼손 인적사항</div>
+            <table class="report-content-table">
+                <tr>
+                    <th style="width: 15%;">부 서</th>
+                    <td style="width: 35%;" id="report-person-team">소방팀</td>
+                    <th style="width: 15%;">직 위</th>
+                    <td style="width: 35%;">담당자 / 반장</td>
+                </tr>
+                <tr>
+                    <th>성 명</th>
+                    <td><input type="text" id="input-person-name" value="홍길동" style="border:none; text-align:center; width:100%; font-family:inherit; font-size:12px; background:transparent;"></td>
+                    <th>관리책임자</th>
+                    <td><input type="text" id="input-manager-name" value="김영배" style="border:none; text-align:center; width:100%; font-family:inherit; font-size:12px; background:transparent;"></td>
+                </tr>
+            </table>
+
+            <div style="font-weight: bold; margin-bottom: 4px; font-size: 12px;">3. 대상 공기구 내역</div>
+            <table class="report-content-table">
+                <thead>
+                    <tr>
+                        <th>관리번호</th>
+                        <th>품 명</th>
+                        <th>규 격</th>
+                        <th>수 량</th>
+                        <th>비 고</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td id="report-item-code">-</td>
+                        <td id="report-item-name">-</td>
+                        <td id="report-item-spec">-</td>
+                        <td id="report-item-qty">-</td>
+                        <td id="report-item-reason">손망실 발생</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div style="font-weight: bold; margin-bottom: 4px; font-size: 12px;">4. 사고 개요 및 사진</div>
+            <table class="report-content-table" style="height: 270px;">
+                <tr>
+                    <td style="width: 50%; vertical-align: top; text-align: left; padding: 12px; line-height: 1.6; font-size: 12px;" id="report-loss-desc">
+                        <strong>[사고 개요 및 내용]</strong><br>파손 및 손망실 발생으로 인한 보고 건.
+                    </td>
+                    <td style="width: 50%; vertical-align: middle; text-align: center; padding: 6px; background: #fafafa; position: relative; border: 1px solid #000; cursor: pointer;" onclick="checkAndUploadReportImg()">
+                        <div id="report-img-paste-box" class="report-img-box" tabindex="0" title="클릭 후 파일 선택 또는 Ctrl+V로 사진 붙여넣기 가능" style="width:100%; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+                            <span id="report-no-photo" style="color: #666; font-size: 12px;">[등록된 실물 사진 없음]<br><span style="font-size:10px; color:#3b82f6;">(클릭 또는 Ctrl+V 붙여넣기)</span></span>
+                            <img id="report-img" src="" style="max-width: 100%; max-height: 290px; object-fit: contain; display:none;" />
+                        </div>
+                        <input type="file" id="report-img-input" accept="image/*" style="display:none;" onchange="uploadReportImage(event)">
+                    </td>
+                </tr>
+            </table>
+        </div>
+
+        <div style="margin-top: 15px;">
+            <div style="text-align: center; margin: 15px 0 10px 0; font-size: 14px; font-weight: bold;">
+                위의 내용이 거짓이 아님을 확인합니다.
+            </div>
+
+            <div style="text-align: center; margin-bottom: 25px; font-size: 12px;" id="report-print-date">
+                2026 년 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 월 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 일
+            </div>
+
+            <div style="text-align: right; font-size: 13px; padding-right: 50px; margin-bottom: 20px;">
+                <strong>성명 :</strong> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; (인)
+            </div>
+
+            <div class="no-print" style="text-align: center; display: flex; gap: 8px; justify-content: center;">
+                <button class="btn-action btn-save" style="padding: 7px 16px; font-size: 13.5px;" onclick="saveLossReportData()">💾 보고서 내용 저장</button>
+                <button class="btn-action btn-print" style="padding: 7px 16px; font-size: 13.5px;" onclick="printLossReport()">🖨️ 보고서 인쇄 / PDF</button>
+                <button class="btn-action" style="background-color:#64748b; color:white; padding: 7px 16px; font-size: 13.5px;" onclick="closeLossReportModal()">✕ 닫기</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 삭제된 이력 복원 모달 -->
+<div id="restoreModal" class="modal-overlay">
+    <div class="modal-content">
+        <h2>🗑️ 삭제된 이력 보관함 <button class="btn-action" style="background-color:#64748b; color:white; font-size:13px;" onclick="closeRestoreModal()">✕ 닫기</button></h2>
+        <div style="margin-bottom: 12px; display:flex; justify-content:space-between; align-items:center;">
+            <span>처리할 이력을 선택하세요.</span>
+            <div style="display: flex; gap: 6px;">
+                <button class="btn-action btn-save" onclick="restoreSelectedHistory()">↺ 선택 이력 복원 (보고서 자동 복구)</button>
+                <button class="btn-action btn-delete-multi" onclick="permanentlyDeleteSelectedHistory()">🗑️ 선택 영구 삭제</button>
+            </div>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th class="checkbox-cell"><input type="checkbox" id="selectAllRestoreCheckbox" class="row-checkbox" onclick="toggleAllRestoreCheckboxes(this)"></th>
+                    <th>삭제시각</th>
+                    <th>원래일시</th>
+                    <th>법인</th>
+                    <th>팀</th>
+                    <th>구분</th>
+                    <th>관리번호</th>
+                    <th>공기구명</th>
+                    <th>사용자/비고</th>
+                </tr>
+            </thead>
+            <tbody id="restore-modal-body"></tbody>
+        </table>
+    </div>
+</div>
+
+<!-- 삭제된 공기구 목록 복원 모달 -->
+<div id="invRestoreModal" class="modal-overlay">
+    <div class="modal-content">
+        <h2>📋 삭제된 공기구 보관함 <button class="btn-action" style="background-color:#64748b; color:white; font-size:13px;" onclick="closeInvRestoreModal()">✕ 닫기</button></h2>
+        <div style="margin-bottom: 12px; display:flex; justify-content:space-between; align-items:center;">
+            <span>처리할 공기구를 선택하세요.</span>
+            <div style="display: flex; gap: 6px;">
+                <button class="btn-action btn-save" onclick="restoreSelectedInvItems()">↺ 선택 공기구 복원</button>
+                <button class="btn-action btn-delete-multi" onclick="permanentlyDeleteSelectedInvItems()">🗑️ 선택 영구 삭제</button>
+            </div>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th class="checkbox-cell"><input type="checkbox" id="selectAllInvRestoreCheckbox" class="row-checkbox" onclick="toggleAllInvRestoreCheckboxes(this)"></th>
+                    <th>삭제시각</th>
+                    <th>법인</th>
+                    <th>팀</th>
+                    <th>관리번호</th>
+                    <th>공기구명</th>
+                    <th>규격</th>
+                    <th>제조사</th>
+                    <th>상태</th>
+                </tr>
+            </thead>
+            <tbody id="inv-restore-modal-body"></tbody>
+        </table>
+    </div>
+</div>
+
+<!-- 📑 삭제된 손망실 보고서 보관함 모달 -->
+<div id="reportRestoreModal" class="modal-overlay">
+    <div class="modal-content">
+        <h2>📑 삭제된 손망실 보고서 보관함 <button class="btn-action" style="background-color:#64748b; color:white; font-size:13px;" onclick="closeReportRestoreModal()">✕ 닫기</button></h2>
+        <div style="margin-bottom: 12px; display:flex; justify-content:space-between; align-items:center;">
+            <span>복원하거나 영구 삭제할 보고서를 선택하세요.</span>
+            <div style="display: flex; gap: 6px;">
+                <button class="btn-action btn-save" onclick="restoreSelectedReports()">↺ 선택 보고서 복원 (연동 이력 자동 복구)</button>
+                <button class="btn-action btn-delete-multi" onclick="permanentlyDeleteSelectedReports()">🗑️ 선택 영구 삭제</button>
+            </div>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th class="checkbox-cell"><input type="checkbox" id="selectAllReportRestoreCheckbox" class="row-checkbox" onclick="toggleAllReportRestoreCheckboxes(this)"></th>
+                    <th>삭제시각</th>
+                    <th>작성일</th>
+                    <th>관리번호</th>
+                    <th>공기구명</th>
+                    <th>구분</th>
+                    <th>담당자</th>
+                </tr>
+            </thead>
+            <tbody id="report-restore-modal-body"></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    const firebaseConfig = {
+        apiKey: "AIzaSyB_ahgFPhi3jH5F_UFnmeAKCODdqWBeTj4",
+        authDomain: "risk-system-24d05.firebaseapp.com",
+        databaseURL: "https://risk-system-24d05-default-rtdb.firebaseio.com",
+        projectId: "risk-system-24d05",
+        storageBucket: "risk-system-24d05.firebasestorage.app",
+        messagingSenderId: "66137542505",
+        appId: "1:66137542505:web:188fdc7333c6a78880b7f8"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const database = firebase.database();
+    const store = firebase.firestore();
+
+    let SYSTEM_PASSWORD = "8888";
+    let isInitialLoadTool = true;
+
+    database.ref('system password').on('value', (snapshot) => {
+        const val = snapshot.val();
+        if (val !== null && val !== undefined) {
+            const newPassword = String(val);
+            if (!isInitialLoadTool && SYSTEM_PASSWORD !== newPassword) {
+                SYSTEM_PASSWORD = newPassword;
+                sessionStorage.removeItem('sys_authenticated');
+                alert("⚠️ 원격에서 비밀번호가 변경되었습니다. 다시 로그인해 주세요.");
+                document.getElementById('sys-pass-input').value = '';
+                document.getElementById('login-overlay').style.display = 'flex';
+                document.getElementById('sys-pass-input').focus();
+                return;
+            }
+            SYSTEM_PASSWORD = newPassword;
+        }
+        isInitialLoadTool = false;
+    });
+
+    function checkSystemPassword() {
+        const inputPass = document.getElementById('sys-pass-input').value;
+        if (inputPass === SYSTEM_PASSWORD) {
+            sessionStorage.setItem('sys_authenticated', 'true');
+            document.getElementById('login-overlay').style.display = 'none';
+        } else {
+            alert('⚠️ 비밀번호가 올바르지 않습니다.');
+            document.getElementById('sys-pass-input').value = '';
+            document.getElementById('sys-pass-input').focus();
+        }
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+        if (sessionStorage.getItem('sys_authenticated') === 'true') {
+            document.getElementById('login-overlay').style.display = 'none';
+        } else {
+            document.getElementById('login-overlay').style.display = 'flex';
+            document.getElementById('sys-pass-input').focus();
+        }
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const teamParam = urlParams.get('team');
+        if (teamParam) {
+            currentTeamSession = teamParam;
+            const teamSelectEl = document.getElementById('current-team-select');
+            if (teamSelectEl) teamSelectEl.value = teamParam;
+            const badgeText = currentTeamSession === 'ALL' ? '전체 보기' : `${currentTeamSession} 전용`;
+            ['dash-team-badge','inv-team-badge','hist-team-badge','period-team-badge'].forEach(id => {
+                const el = document.getElementById(id);
+                if(el) el.innerText = badgeText;
+            });
+            if (currentTeamSession !== 'ALL') {
+                document.getElementById('filter-team-inv').value = currentTeamSession;
+                document.getElementById('filter-team-hist').value = currentTeamSession;
+                document.getElementById('filter-team-period').value = currentTeamSession;
+            }
+            if (typeof renderApp === 'function') renderApp();
+        }
+    });
+
+    database.ref('is_locked').on('value', (snapshot) => {
+        const isLocked = snapshot.val();
+        const lockOverlay = document.getElementById('system-lock-overlay');
+        if (isLocked === true) {
+            lockOverlay.style.display = 'flex'; 
+        } else {
+            lockOverlay.style.display = 'none';  
+        }
+    });
+
+    const GSHEET_WEB_APP_URL = "https://script.google.com/macros/s/AKfycby9_H5S8zl6Ts4yZ2gBEMiZsUSu5Q02zgjQodDA1BXnGBIj6u5W10lU2UQTjudBhMct/exec";
+
+    async function saveDataToGoogleSheet() {
+        if (isReadOnlyHistoryMode) {
+            alert('⚠️ 현재 과거 백업 이력 조회 모드입니다. 서버 덮어쓰기 방지를 위해 저장이 차단되어 있습니다.');
+            return;
+        }
+        if (!GSHEET_WEB_APP_URL || GSHEET_WEB_APP_URL.includes("여기에")) {
+            alert("⚠️ 구글 앱스 스크립트 웹 앱 URL이 설정되지 않았습니다.");
+            return;
+        }
+
+        const payload = {
+            action: "save",
+            inventory: inventory,
+            historyLogs: historyLogs,
+            deletedHistoryLogs: deletedHistoryLogs,
+            deletedInventoryItems: deletedInventoryItems,
+            deletedReportsList: deletedReportsList
+        };
+
+        try {
+            await saveData();
+            await fetch(GSHEET_WEB_APP_URL, {
+                method: "POST",
+                mode: "no-cors",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+            alert('💾 구글 시트에 데이터가 성공적으로 저장되었습니다.');
+        } catch (error) {
+            console.error(error);
+            alert('⚠️ 구글 시트 저장 중 오류가 발생했습니다.');
+        }
+    }
+
+    async function loadDataFromGoogleSheet() {
+        if (isReadOnlyHistoryMode) {
+            alert('⚠️ 과거 백업 조회 모드 중입니다. 실시간 모드로 복귀 후 이용해 주세요.');
+            return;
+        }
+        if (!GSHEET_WEB_APP_URL || GSHEET_WEB_APP_URL.includes("여기에")) {
+            alert("⚠️ 구글 앱스 스크립트 웹 앱 URL이 설정되지 않았습니다.");
+            return;
+        }
+
+        if (!confirm("📂 구글 시트에서 최신 데이터를 불러옵니다. 진행하시겠습니까?")) return;
+
+        try {
+            const response = await fetch(GSHEET_WEB_APP_URL + "?action=load");
+            const result = await response.json();
+
+            if (result && result.inventory) {
+                inventory = result.inventory || [];
+                historyLogs = result.historyLogs || [];
+                deletedHistoryLogs = result.deletedHistoryLogs || [];
+                deletedInventoryItems = result.deletedInventoryItems || [];
+                deletedReportsList = result.deletedReportsList || [];
+
+                await saveData();
+                renderApp();
+                alert('✅ 구글 시트에서 데이터를 불러왔습니다!');
+            }
+        } catch (error) {
+            console.error(error);
+            alert('⚠️ 데이터를 불러오는 중 오류가 발생했습니다.');
+        }
+    }
+
+    const currentYear = new Date().getFullYear();
+    let lastActiveYear = localStorage.getItem('my_tool_multireport_year') || String(currentYear);
+    
+    let inventory = JSON.parse(localStorage.getItem('my_tool_multireport_data')) || [
+        { corp: '아태', team: '소방팀', code: 'TOOL-소방-아태-001', name: '충전식 드릴', spec: 'GSR 1440 - LI', qty: 2, maker: 'BOSCH', date: '2012.12.27', status: '양호', img: '', lossInfo: null, reportsList: [] },
+        { corp: 'KIFT', team: '소방팀', code: 'TOOL-소방-KIFT-001', name: '해머드릴', spec: 'HR2470', qty: 1, maker: 'MAKITA', date: '2023.05.10', status: '양호', img: '', lossInfo: null, reportsList: [] }
+    ];
+    let historyLogs = JSON.parse(localStorage.getItem('my_tool_multireport_history')) || [];
+    let deletedHistoryLogs = JSON.parse(localStorage.getItem('my_tool_multireport_del_hist')) || [];
+    let deletedInventoryItems = JSON.parse(localStorage.getItem('my_tool_multireport_del_inv')) || [];
+    let deletedReportsList = JSON.parse(localStorage.getItem('my_tool_multireport_del_rep')) || [];
+
+    let isUpdatingFromRemote = false;
+    let isReadOnlyHistoryMode = false;
+
+    let unsubscribeFirestoreTool = null;
+
+    function setupToolFirestoreSync() {
+        if (isReadOnlyHistoryMode) return;
+        if (unsubscribeFirestoreTool) unsubscribeFirestoreTool();
+
+        unsubscribeFirestoreTool = store.collection('tool_system').doc('main_data').onSnapshot((doc) => {
+            if (doc.exists && !isUpdatingFromRemote && !isReadOnlyHistoryMode) {
+                const data = doc.data();
+
+                inventory = data.inventory || [];
+                historyLogs = data.historyLogs || [];
+                deletedHistoryLogs = data.deletedHistoryLogs || [];
+                deletedInventoryItems = data.deletedInventoryItems || [];
+                deletedReportsList = data.deletedReportsList || [];
+
+                try {
+                    localStorage.setItem('my_tool_multireport_data', JSON.stringify(inventory));
+                    localStorage.setItem('my_tool_multireport_history', JSON.stringify(historyLogs));
+                    localStorage.setItem('my_tool_multireport_del_hist', JSON.stringify(deletedHistoryLogs));
+                    localStorage.setItem('my_tool_multireport_del_inv', JSON.stringify(deletedInventoryItems));
+                    localStorage.setItem('my_tool_multireport_del_rep', JSON.stringify(deletedReportsList));
+                } catch (e) {
+                    console.warn("로컬 동기화 경고:", e);
+                }
+
+                renderApp();
+            }
+        }, (err) => {
+            console.error("파이어스토어 실시간 수신 오류:", err);
+        });
+    }
+
+    setupToolFirestoreSync();
+
+    if (String(currentYear) !== lastActiveYear && currentYear >= 2027) {
+        inventory.forEach(item => {
+            if (item.lossInfo && item.lossInfo.year < currentYear) {
+                item.lossInfo = null;
+                if (item.status === '정상/손망실(폐기)' && item.qty > 0) item.status = '양호';
+            }
+        });
+        localStorage.setItem('my_tool_multireport_year', String(currentYear));
+    }
+
+    historyLogs.forEach((h, idx) => {
+        if (!h.id) h.id = 'thist_' + Date.now() + '_' + idx;
+    });
+
+    let currentTeamSession = 'ALL';
+    let corpFilters = { inv: 'ALL', hist: 'ALL', period: 'ALL' };
+    let selectedHistoryCode = null;
+    let lastLossType = '폐기';
+    let currentReportEditIndex = null;
+
+    document.getElementById('quick-trans-date').valueAsDate = new Date();
+    document.getElementById('search-start-date').valueAsDate = new Date();
+    document.getElementById('search-end-date').valueAsDate = new Date();
+
+    async function saveData() {
+        if (isReadOnlyHistoryMode) return;
+        try {
+            isUpdatingFromRemote = true;
+            try {
+                localStorage.setItem('my_tool_multireport_data', JSON.stringify(inventory));
+                localStorage.setItem('my_tool_multireport_history', JSON.stringify(historyLogs));
+                localStorage.setItem('my_tool_multireport_del_hist', JSON.stringify(deletedHistoryLogs));
+                localStorage.setItem('my_tool_multireport_del_inv', JSON.stringify(deletedInventoryItems));
+                localStorage.setItem('my_tool_multireport_del_rep', JSON.stringify(deletedReportsList));
+            } catch (e) {
+                console.warn("로컬 용량 초과. 클라우드 전송 집중 진행", e);
+            }
+
+            await store.collection('tool_system').doc('main_data').set({
+                inventory: inventory,
+                historyLogs: historyLogs,
+                deletedHistoryLogs: deletedHistoryLogs,
+                deletedInventoryItems: deletedInventoryItems,
+                deletedReportsList: deletedReportsList,
+                updatedAt: new Date().toISOString()
+            });
+            
+            setTimeout(() => { isUpdatingFromRemote = false; }, 1200);
+        } catch (e) {
+            isUpdatingFromRemote = false;
+            console.warn("저장 중 오류:", e);
+        }
+    }
+
+    function checkAdminRestriction() {
+        if (isReadOnlyHistoryMode) {
+            alert('⚠️ 과거 백업 조회 모드에서는 사진 수정이 불가합니다.');
+            return true;
+        }
+        if (currentTeamSession === 'ALL') {
+            alert('⚠️ 총괄 관리자 모드에서는 사진 등록이 불가합니다. 개별 팀을 선택해 주세요.');
+            return true;
+        }
+        return false;
+    }
+
+    function printCurrentTab(titleText) {
+        let teamLabel = currentTeamSession === 'ALL' ? '전체 (총괄 관리자)' : currentTeamSession;
+        document.getElementById('print-title').innerText = `${teamLabel} - ${titleText}`;
+        document.getElementById('print-date-info').innerText = `출력일자: ${new Date().toISOString().split('T')[0]} | 접속 팀: ${teamLabel}`;
+        
+        document.body.classList.remove('is-printing-report');
+        window.print();
+    }
+
+    function printLossReport() {
+        document.body.classList.add('is-printing-report');
+        window.print();
+        document.body.classList.remove('is-printing-report');
+    }
+
+    async function saveLossReportData() {
+        if (isReadOnlyHistoryMode) {
+            alert('⚠️ 과거 백업 조회 모드에서는 보고서 저장이 차단됩니다.');
+            return;
+        }
+        if (!selectedHistoryCode) return;
+        let item = inventory.find(i => i.code === selectedHistoryCode);
+        if (!item) return;
+
+        if (!item.reportsList) item.reportsList = [];
+
+        const personName = document.getElementById('input-person-name').value;
+        const managerName = document.getElementById('input-manager-name').value;
+        const repImgSrc = document.getElementById('report-img').src;
+        const hasImg = document.getElementById('report-img').style.display !== 'none' ? repImgSrc : '';
+
+        const reportEntry = {
+            id: 'rep_' + Date.now(),
+            code: item.code,
+            itemName: item.name,
+            date: new Date().toLocaleDateString(),
+            personName: personName,
+            managerName: managerName,
+            lossType: lastLossType,
+            img: hasImg
+        };
+
+        if (currentReportEditIndex !== null && item.reportsList[currentReportEditIndex]) {
+            item.reportsList[currentReportEditIndex] = reportEntry;
+        } else {
+            item.reportsList.push(reportEntry);
+        }
+
+        await saveData();
+        renderToolDetailCard(item);
+        alert('💾 손망실 보고서가 성공적으로 저장 및 클라우드 연동되었습니다!');
+    }
+
+    function exportBackup() {
+        let exportData, filename;
+
+        if (currentTeamSession === 'ALL') {
+            exportData = {
+                type: 'TOTAL_BACKUP',
+                version: '1.0',
+                exportedAt: new Date().toLocaleString(),
+                inventory: inventory,
+                historyLogs: historyLogs,
+                deletedHistoryLogs: deletedHistoryLogs,
+                deletedInventoryItems: deletedInventoryItems,
+                deletedReportsList: deletedReportsList
+            };
+            filename = `전체통합_공기구백업_${new Date().toISOString().split('T')[0]}.json`;
+        } else {
+            exportData = {
+                type: 'TEAM_BACKUP',
+                version: '1.0',
+                teamName: currentTeamSession,
+                exportedAt: new Date().toLocaleString(),
+                inventory: inventory.filter(i => i.team === currentTeamSession),
+                historyLogs: historyLogs.filter(h => h.team === currentTeamSession),
+                deletedHistoryLogs: deletedHistoryLogs.filter(h => h.team === currentTeamSession),
+                deletedInventoryItems: deletedInventoryItems.filter(i => i.team === currentTeamSession),
+                deletedReportsList: deletedReportsList
+            };
+            filename = `${currentTeamSession}_공기구백업_${new Date().toISOString().split('T')[0]}.json`;
+        }
+
+        const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+
+    function importBackup(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = async function(e) {
+            try {
+                const parsed = JSON.parse(e.target.result);
+                let importedInv = [];
+                let importedHist = [];
+                let importedDelHist = [];
+                let importedDelInv = [];
+                let importedDelRep = [];
+                let targetTeam = parsed.teamName || null;
+                let exportDate = parsed.exportedAt || '과거 시점';
+
+                if (Array.isArray(parsed)) {
+                    importedInv = parsed;
+                } else if (parsed && typeof parsed === 'object') {
+                    importedInv = parsed.inventory || parsed.data || [];
+                    importedHist = parsed.historyLogs || parsed.history || [];
+                    importedDelHist = parsed.deletedHistoryLogs || [];
+                    importedDelInv = parsed.deletedInventoryItems || [];
+                    importedDelRep = parsed.deletedReportsList || [];
+                }
+
+                const userChoice = confirm(`📥 [${targetTeam || '전체'}] (${exportDate} 백업본)\n\n확인(확인): 안전하게 [과거 백업본 조회 / 인쇄 모드]로 열기 (서버 덮어쓰기 방지)\n취소(취소): 불러오기 취소`);
+
+                if (userChoice) {
+                    if (unsubscribeFirestoreTool) unsubscribeFirestoreTool();
+                    isReadOnlyHistoryMode = true;
+
+                    inventory = importedInv;
+                    historyLogs = importedHist;
+                    deletedHistoryLogs = importedDelHist;
+                    deletedInventoryItems = importedDelInv;
+                    deletedReportsList = importedDelRep;
+
+                    document.getElementById('backup-readonly-banner').style.display = 'flex';
+                    document.getElementById('btn_save_main').style.opacity = '0.5';
+                    document.getElementById('btn_save_main').style.cursor = 'not-allowed';
+
+                    renderApp();
+                    alert(`📂 [${targetTeam || '전체'}] 과거 백업 데이터 조회가 활성화되었습니다.\n(클라우드 덮어쓰기가 방지된 상태로 인쇄/PDF 출력이 가능합니다)`);
+                }
+            } catch (err) {
+                alert('⚠️ 백업 파일을 읽는 도중 오류가 발생했습니다.');
+            }
+            event.target.value = '';
+        };
+        reader.readAsText(file, 'UTF-8');
+    }
+
+    function exitReadOnlyMode() {
+        if (confirm('🔄 과거 백업 조회를 종료하고, 실시간 클라우드(최신 서버) 모드로 복귀하시겠습니까?')) {
+            isReadOnlyHistoryMode = false;
+            document.getElementById('backup-readonly-banner').style.display = 'none';
+            document.getElementById('btn_save_main').style.opacity = '1';
+            document.getElementById('btn_save_main').style.cursor = 'pointer';
+            
+            setupToolFirestoreSync();
+            renderApp();
+        }
+    }
+
+    function exportToExcel() {
+        let exportList = inventory;
+        if (currentTeamSession !== 'ALL') exportList = exportList.filter(i => i.team === currentTeamSession);
+        if (corpFilters.inv !== 'ALL') exportList = exportList.filter(i => i.corp === corpFilters.inv);
+
+        exportList.sort((a, b) => (a.code || a.name).localeCompare(b.code || b.name, undefined, { numeric: true, sensitivity: 'base' }));
+
+        const excelData = exportList.map((item, idx) => ({
+            'NO': idx + 1, '법인': item.corp, '담당팀': item.team, '관리번호': item.code, '공구명': item.name, '규격': item.spec, '수량': item.qty, '제조사': item.maker, '구입일자': item.date, '상태': item.status
+        }));
+
+        const worksheet = XLSX.utils.json_to_sheet(excelData);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "공기구목록");
+        XLSX.writeFile(workbook, `공기구보유목록_${currentTeamSession}_${new Date().toISOString().split('T')[0]}.xlsx`);
+    }
+
+    function getNextAutoCode(team, corp) {
+        let teamShort = team.replace('팀', '');
+        let prefix = `TOOL-${teamShort}-${corp}-`;
+        let maxNum = 0;
+        const checkList = [...inventory, ...deletedInventoryItems];
+        checkList.forEach(item => {
+            if (item.code && item.code.startsWith(prefix)) {
+                let numPart = parseInt(item.code.replace(prefix, ''));
+                if (!isNaN(numPart) && numPart > maxNum) maxNum = numPart;
+            }
+        });
+        return prefix + String(maxNum + 1).padStart(3, '0');
+    }
+
+    async function addNewItem() {
+        if (isReadOnlyHistoryMode) {
+            alert('⚠️ 과거 백업 조회 모드에서는 추가가 차단됩니다.');
+            return;
+        }
+        let team = currentTeamSession === 'ALL' ? (prompt("담당 팀명을 입력하세요 (예: 소방팀, 전기팀)", "소방팀") || "소방팀") : currentTeamSession;
+        let corp = prompt("법인명을 입력하세요 (아태 또는 KIFT):", "아태") || "아태";
+        corp = corp.trim().includes('KIFT') ? 'KIFT' : '아태';
+
+        let autoCode = getNextAutoCode(team, corp);
+        let name = prompt("공기구명을 입력하세요:", "함마드릴");
+        if (!name) return;
+        
+        let code = prompt("관리번호를 확인/수정하세요:", autoCode);
+        if (!code) return;
+        code = code.trim();
+
+        if (inventory.some(item => item.code === code)) {
+            alert(`⚠️ 이미 존재하는 관리번호입니다: [${code}]`);
+            return;
+        }
+
+        let spec = prompt("규격 및 사양을 입력하세요:", "220V");
+        let qty = parseInt(prompt("수량을 입력하세요:", "1")) || 1;
+        let maker = prompt("제조사를 입력하세요:", "힐티");
+        let date = prompt("구입일자 (YYYY-MM-DD):", new Date().toISOString().split('T')[0]);
+
+        inventory.push({ corp, team, code, name: name.trim(), spec, qty, maker, date, status: '양호', img: '', lossInfo: null, reportsList: [] });
+        await saveData(); renderApp();
+        alert(`✅ 공기구가 추가되었습니다. (관리번호: ${code})`);
+    }
+
+    async function editItem(code) {
+        if (isReadOnlyHistoryMode) {
+            alert('⚠️ 과거 백업 조회 모드에서는 수정이 차단됩니다.');
+            return;
+        }
+        let item = inventory.find(i => i.code === code);
+        if (!item) return;
+
+        let newName = prompt("공기구명을 수정하세요:", item.name); if (newName === null) return;
+        let newSpec = prompt("규격/사양을 수정하세요:", item.spec); if (newSpec === null) return;
+        let newQty = prompt("수량을 수정하세요:", item.qty); if (newQty === null) return;
+        let newMaker = prompt("제조사를 수정하세요:", item.maker); if (newMaker === null) return;
+        let newDate = prompt("구입일자를 수정하세요:", item.date); if (newDate === null) return;
+        let newStatus = prompt("상태를 수정하세요:", item.status); if (newStatus === null) return;
+
+        item.name = newName.trim(); 
+        item.spec = newSpec.trim(); 
+        item.qty = parseInt(newQty) || 0;
+        item.maker = newMaker.trim(); 
+        item.date = newDate.trim(); 
+        item.status = newStatus.trim();
+        
+        await saveData(); renderApp();
+        if (selectedHistoryCode === code) renderToolDetailCard(item);
+        alert('✅ 공기구 정보가 수정되었습니다.');
+    }
+
+    async function processLossItem() {
+        if (isReadOnlyHistoryMode) {
+            alert('⚠️ 과거 백업 조회 모드에서는 손망실 처리가 차단됩니다.');
+            return;
+        }
+        if (!selectedHistoryCode) return;
+        let item = inventory.find(i => i.code === selectedHistoryCode);
+        if (!item) return;
+
+        let lossTypeChoice = prompt("손망실 구분을 선택하세요:\n1. 분실\n2. 훼손(수리가능)\n3. 훼손(수리불가능)\n4. 폐기", "4");
+        if (!lossTypeChoice) return;
+
+        if (lossTypeChoice.includes('1') || lossTypeChoice.includes('분실')) lastLossType = '분실';
+        else if (lossTypeChoice.includes('2') || lossTypeChoice.includes('수리가능')) lastLossType = '훼손 수리가능';
+        else if (lossTypeChoice.includes('3') || lossTypeChoice.includes('수리불가능')) lastLossType = '훼손 수리불가능';
+        else lastLossType = '폐기';
+
+        let lossQtyStr = prompt(`[${item.name}] (${lastLossType}) 처리할 수량을 입력하세요:`, "1");
+        if (!lossQtyStr) return;
+        let lossQty = parseInt(lossQtyStr);
+
+        if (isNaN(lossQty) || lossQty <= 0 || lossQty > item.qty) {
+            alert('수량을 올바르게 입력해주세요.');
+            return;
+        }
+
+        item.qty -= lossQty;
+        if (item.qty <= 0) { item.qty = 0; item.status = '폐기'; }
+        else { item.status = '정상/손망실(폐기)'; }
+
+        item.lossInfo = { year: new Date().getFullYear(), type: lastLossType, qty: lossQty };
+        historyLogs.push({ id: 'thist_' + Date.now(), date: new Date().toISOString().split('T')[0], corp: item.corp, team: item.team, type: '손망실', code: item.code, name: item.name, worker: `[손망실-${lastLossType}] ${lossQty}개 차감` });
+
+        await saveData(); renderToolDetailCard(item); renderApp();
+        alert(`🚨 [${lastLossType}] 처리되었습니다.`);
+    }
+
+    function openLossReportModalNew() { currentReportEditIndex = null; openLossReportModalByIndex(null); }
+
+    function openLossReportModalByIndex(idx) {
+        if (!selectedHistoryCode) return;
+        let item = inventory.find(i => i.code === selectedHistoryCode);
+        if (!item) return;
+
+        document.getElementById('report-corp-name').innerText = item.corp === '아태' ? '아태산업개발주식회사' : 'KIFT 주식회사';
+        document.getElementById('report-team-name').innerText = item.team;
+        document.getElementById('report-doc-no').innerText = `${item.team.replace('팀','')} A - ${item.code.split('-').pop()}`;
+        document.getElementById('report-loss-date').innerText = `${new Date().getFullYear()}년 ${String(new Date().getMonth()+1).padStart(2,'0')}월 ${String(new Date().getDate()).padStart(2,'0')}일`;
+        document.getElementById('report-person-team').innerText = item.team;
+        document.getElementById('report-item-code').innerText = item.code;
+        document.getElementById('report-item-name').innerText = item.name;
+        document.getElementById('report-item-spec').innerText = item.spec || '-';
+        document.getElementById('report-item-qty').innerText = item.qty;
+        document.getElementById('report-print-date').innerText = `${new Date().getFullYear()} 년 ${new Date().getMonth()+1} 월 ${new Date().getDate()} 일`;
+
+        if (idx !== null && item.reportsList && item.reportsList[idx]) {
+            currentReportEditIndex = idx;
+            const rep = item.reportsList[idx];
+            document.getElementById('input-person-name').value = rep.personName || '홍길동';
+            document.getElementById('input-manager-name').value = rep.managerName || '김영배';
+            lastLossType = rep.lossType || lastLossType;
+            
+            const repImg = document.getElementById('report-img');
+            const noRepImg = document.getElementById('report-no-photo');
+            if (rep.img) { repImg.src = rep.img; repImg.style.display = 'block'; noRepImg.style.display = 'none'; }
+            else { repImg.style.display = 'none'; noRepImg.style.display = 'block'; }
+        } else {
+            currentReportEditIndex = null;
+            const repImg = document.getElementById('report-img');
+            const noRepImg = document.getElementById('report-no-photo');
+            if (item.img) { repImg.src = item.img; repImg.style.display = 'block'; noRepImg.style.display = 'none'; }
+            else { repImg.style.display = 'none'; noRepImg.style.display = 'block'; }
+        }
+
+        document.getElementById('report-type-checks').innerText = `분실( [ ${lastLossType==='분실'?'O':' '} ] ), 훼손 수리가능( [ ${lastLossType==='훼손 수리가능'?'O':' '} ] ), 훼손 수리불가능( [ ${lastLossType==='훼손 수리불가능'?'O':' '} ] ), 폐기( [ ${lastLossType==='폐기'?'O':' '} ] )`;
+        document.getElementById('report-loss-desc').innerHTML = `<strong>[사고 개요 및 내용]</strong><br>관리번호 [${item.code}] ${item.name} 장비의 ${lastLossType} 발생으로 인한 보고 건.`;
+        document.getElementById('lossReportModal').style.display = 'flex';
+    }
+
+    function closeLossReportModal() { document.getElementById('lossReportModal').style.display = 'none'; }
+    function checkAndUploadToolImg() { if (checkAdminRestriction()) return; document.getElementById('tool-img-input').click(); }
+
+    function compressAndResizeImage(file, callback) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const img = new Image();
+            img.onload = function() {
+                const canvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+                const MAX_SIZE = 400;
+                if (width > height) {
+                    if (width > MAX_SIZE) { height *= MAX_SIZE / width; width = MAX_SIZE; }
+                } else {
+                    if (height > MAX_SIZE) { width *= MAX_SIZE / height; height = MAX_SIZE; }
+                }
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+                const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.4);
+                callback(compressedDataUrl);
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    }
+
+    function uploadToolImage(event) {
+        const file = event.target.files[0];
+        if (!file || !selectedHistoryCode) return;
+
+        compressAndResizeImage(file, async function(base64Img) {
+            const item = inventory.find(i => i.code === selectedHistoryCode);
+            if (item) {
+                item.img = base64Img;
+                await saveData();
+                renderToolDetailCard(item);
+                alert('📸 사진이 압축되어 정상적으로 연동 저장되었습니다.');
+            }
+        });
+        event.target.value = '';
+    }
+
+    function uploadReportImage(event) {
+        const file = event.target.files[0];
+        if (!file || !selectedHistoryCode) return;
+
+        compressAndResizeImage(file, async function(base64Img) {
+            const item = inventory.find(i => i.code === selectedHistoryCode);
+            if (item) {
+                item.img = base64Img;
+                await saveData();
+                renderToolDetailCard(item);
+                openLossReportModalByIndex(currentReportEditIndex);
+                alert('📸 보고서 사진이 정상적으로 연동 저장되었습니다.');
+            }
+        });
+        event.target.value = '';
+    }
+
+    const pasteBox = document.getElementById('tool-paste-box');
+    if (pasteBox) {
+        pasteBox.addEventListener('paste', function(e) {
+            if (checkAdminRestriction()) { e.preventDefault(); return; }
+            const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+            for (let i = 0; i < items.length; i++) {
+                if (items[i].type.indexOf('image') !== -1) {
+                    const blob = items[i].getAsFile();
+                    compressAndResizeImage(blob, async function(base64Img) {
+                        if (selectedHistoryCode) {
+                            const item = inventory.find(inv => inv.code === selectedHistoryCode);
+                            if (item) {
+                                item.img = base64Img;
+                                await saveData();
+                                renderToolDetailCard(item);
+                                alert('📸 클립보드 사진이 정상 등록/저장되었습니다!');
+                            }
+                        }
+                    });
+                    e.preventDefault();
+                    break;
+                }
+            }
+        });
+    }
+
+    const reportPasteBox = document.getElementById('report-img-paste-box');
+    if (reportPasteBox) {
+        reportPasteBox.addEventListener('paste', function(e) {
+            if (checkAdminRestriction()) { e.preventDefault(); return; }
+            const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+            for (let i = 0; i < items.length; i++) {
+                if (items[i].type.indexOf('image') !== -1) {
+                    const blob = items[i].getAsFile();
+                    compressAndResizeImage(blob, async function(base64Img) {
+                        if (selectedHistoryCode) {
+                            const item = inventory.find(inv => inv.code === selectedHistoryCode);
+                            if (item) {
+                                item.img = base64Img;
+                                await saveData();
+                                renderToolDetailCard(item);
+                                openLossReportModalByIndex(currentReportEditIndex);
+                                alert('📸 보고서 사진이 저장/연동되었습니다!');
+                            }
+                        }
+                    });
+                    e.preventDefault();
+                    break;
+                }
+            }
+        });
+    }
+
+    function checkAndUploadReportImg() { if (checkAdminRestriction()) return; document.getElementById('report-img-input').click(); }
+
+    function importFromExcel(event) {
+        if (isReadOnlyHistoryMode) {
+            alert('⚠️ 과거 백업 조회 모드에서는 엑셀 업로드가 차단됩니다.');
+            return;
+        }
+        const file = event.target.files[0];
+        if (!file) return;
+        const fileName = file.name;
+
+        let defaultCorp = fileName.includes('KIFT') || fileName.includes('키프트') ? 'KIFT' : '아태';
+        let defaultTeam = currentTeamSession !== 'ALL' ? currentTeamSession : '소방팀';
+        if (fileName.includes('전기')) defaultTeam = '전기팀';
+        else if (fileName.includes('설비')) defaultTeam = '설비팀';
+        else if (fileName.includes('건축')) defaultTeam = '건축팀';
+        else if (fileName.includes('점검')) defaultTeam = '점검팀';
+        else if (fileName.includes('냉동')) defaultTeam = '냉동';
+        else if (fileName.includes('운송')) defaultTeam = '운송';
+        else if (fileName.includes('미화')) defaultTeam = '미화팀';
+        else if (fileName.includes('장비')) defaultTeam = '장비관리팀';
+
+        const reader = new FileReader();
+        reader.onload = async function(e) {
+            try {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+                let totalAdded = 0;
+                let totalUpdated = 0;
+
+                workbook.SheetNames.forEach(sheetName => {
+                    if (sheetName.includes('사진')) return;
+                    const worksheet = workbook.Sheets[sheetName];
+                    const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+                    
+                    let headerRowIdx = -1;
+                    let headers = [];
+                    for (let i = 0; i < Math.min(15, rows.length); i++) {
+                        const rowStr = rows[i].join('');
+                        if (rowStr.includes('공구명') || rowStr.includes('품명') || rowStr.includes('규격') || rowStr.includes('품목')) {
+                            headerRowIdx = i;
+                            headers = rows[i].map(h => String(h).replace(/\s/g, ''));
+                            break;
+                        }
+                    }
+
+                    if (headerRowIdx === -1) return;
+
+                    let sheetCorp = defaultCorp;
+                    if (sheetName.includes('KIFT') || sheetName.includes('키프트')) sheetCorp = 'KIFT';
+                    else if (sheetName.includes('아태')) sheetCorp = '아태';
+
+                    let sheetTeam = defaultTeam;
+                    if (sheetName.includes('전기')) sheetTeam = '전기팀';
+                    else if (sheetName.includes('설비')) sheetTeam = '설비팀';
+                    else if (sheetName.includes('건축')) sheetTeam = '건축팀';
+                    else if (sheetName.includes('점검')) sheetTeam = '점검팀';
+                    else if (sheetName.includes('냉동')) sheetTeam = '냉동';
+                    else if (sheetName.includes('운송')) sheetTeam = '운송';
+                    else if (sheetName.includes('미화')) sheetTeam = '미화팀';
+                    else if (sheetName.includes('장비')) sheetTeam = '장비관리팀';
+
+                    for (let i = headerRowIdx + 1; i < rows.length; i++) {
+                        const r = rows[i];
+                        if (!r || r.length === 0) continue;
+
+                        let rowData = {};
+                        headers.forEach((h, idx) => { rowData[h] = r[idx]; });
+
+                        let name = String(rowData['공구명'] || rowData['품명'] || rowData['품목명'] || rowData['공기구명'] || rowData['장비명'] || '').trim();
+                        if (!name || name === '' || name === 'undefined') continue;
+
+                        let rowCorpVal = String(rowData['법인'] || rowData['회사'] || '').trim();
+                        let rowCorp = sheetCorp;
+                        if (rowCorpVal.includes('KIFT') || rowCorpVal.includes('키프트')) rowCorp = 'KIFT';
+                        else if (rowCorpVal.includes('아태')) rowCorp = '아태';
+
+                        let rowTeamVal = String(rowData['담당팀'] || rowData['담당 팀'] || rowData['부서'] || rowData['팀'] || '').trim();
+                        let rowTeam = sheetTeam;
+                        if (rowTeamVal) {
+                            if (!rowTeamVal.endsWith('팀') && !['냉동','운송'].includes(rowTeamVal)) {
+                                rowTeamVal += '팀';
+                            }
+                            rowTeam = rowTeamVal;
+                        }
+                        
+                        let rowTeamShort = rowTeam.replace('팀', '');
+
+                        let noRawVal = rowData['NO'] || rowData['No'] || rowData['No.'] || rowData['NO.'] || rowData['순번'] || rowData['관리번호'] || '';
+                        let noRaw = String(noRawVal).replace(/[^0-9]/g, '');
+                        let code = noRaw ? `TOOL-${rowTeamShort}-${rowCorp}-${String(noRaw).padStart(3, '0')}` : getNextAutoCode(rowTeam, rowCorp);
+
+                        let spec = String(rowData['규격'] || rowData['사양'] || rowData['규격/사양'] || '').trim();
+                        let qty = parseInt(String(rowData['수량'] || rowData['실사'] || rowData['개수'] || 1).replace(/[^0-9]/g, '')) || 1;
+                        let maker = String(rowData['제조사'] || rowData['메이커'] || rowData['제조업체'] || '국산').trim();
+                        if (!maker) maker = '국산';
+
+                        let dateRaw = rowData['구입일자'] || rowData['구입일'] || rowData['취득일자'] || rowData['구입년월일'] || '';
+                        let date = '';
+                        if (dateRaw instanceof Date) {
+                            date = dateRaw.toISOString().split('T')[0];
+                        } else {
+                            date = String(dateRaw).trim().substring(0, 10);
+                            if (date.includes('/')) date = date.replace(/\//g, '-');
+                            if (date.includes('.')) date = date.replace(/\./g, '-');
+                            if (date.length === 8 && !date.includes('-')) {
+                                date = `${date.substring(0,4)}-${date.substring(4,6)}-${date.substring(6,8)}`;
+                            }
+                        }
+                        if (!date || date.length < 8) {
+                            date = new Date().toISOString().split('T')[0];
+                        }
+
+                        let status = '양호';
+                        let statVal = String(rowData['상태'] || '');
+                        if (statVal.includes('수리') || statVal.includes('중')) status = '수리중';
+                        if (statVal.includes('폐기')) status = '폐기';
+
+                        const existingIdx = inventory.findIndex(item => 
+                            item.code === code || 
+                            (item.name === name && item.corp === rowCorp && item.team === rowTeam && item.spec === spec)
+                        );
+
+                        if (existingIdx > -1) {
+                            inventory[existingIdx].spec = spec;
+                            inventory[existingIdx].qty = qty;
+                            inventory[existingIdx].maker = maker;
+                            inventory[existingIdx].date = date;
+                            totalUpdated++;
+                        } else {
+                            inventory.push({
+                                corp: rowCorp,
+                                team: rowTeam,
+                                code: code,
+                                name: name,
+                                spec: spec,
+                                qty: qty,
+                                maker: maker,
+                                date: date,
+                                status: status,
+                                img: '',
+                                lossInfo: null,
+                                reportsList: []
+                            });
+                            totalAdded++;
+                        }
+                    }
+                });
+
+                await saveData();
+                renderApp();
+                alert(`📊 엑셀 업로드 성공!\n- 신규 추가: ${totalAdded}개\n- 기존 업데이트: ${totalUpdated}개\n총 ${totalAdded + totalUpdated}개의 공기구가 정상 반영되었습니다.`);
+            } catch (err) {
+                alert('엑셀 파일 읽기 오류: ' + err.message);
+                console.error(err);
+            }
+            event.target.value = '';
+        };
+        reader.readAsArrayBuffer(file);
+    }
+
+    function changeTeam() {
+        currentTeamSession = document.getElementById('current-team-select').value;
+        const badgeText = currentTeamSession === 'ALL' ? '전체 보기' : `${currentTeamSession} 전용`;
+        ['dash-team-badge','inv-team-badge','hist-team-badge','period-team-badge'].forEach(id => {
+            const el = document.getElementById(id); if(id === 'dash-team-badge' && currentTeamSession === 'ALL') el.innerText = '전체 보기';
+            else if(el) el.innerText = badgeText;
+        });
+
+        if (currentTeamSession !== 'ALL') {
+            document.getElementById('filter-team-inv').value = currentTeamSession;
+            document.getElementById('filter-team-hist').value = currentTeamSession;
+            document.getElementById('filter-team-period').value = currentTeamSession;
+        }
+
+        clearHistoryFilter(); renderApp();
+    }
+
+    function setCorpFilter(corp, tabKey, btn) {
+        corpFilters[tabKey] = corp;
+        const parentDiv = btn.parentElement;
+        parentDiv.querySelectorAll('.corp-tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        if (tabKey === 'inv') renderApp();
+        else if (tabKey === 'hist') renderHistory();
+        else if (tabKey === 'period') renderPeriodSearch();
+    }
+
+    async function submitQuickTransaction() {
+        if (isReadOnlyHistoryMode) {
+            alert('⚠️ 과거 백업 조회 모드에서는 등록이 차단됩니다.');
+            return;
+        }
+        const date = document.getElementById('quick-trans-date').value;
+        const itemCode = document.getElementById('quick-trans-item').value;
+        const type = document.getElementById('quick-trans-type').value;
+        const worker = document.getElementById('quick-trans-worker').value;
+
+        const item = inventory.find(i => i.code === itemCode);
+        if (!item) { alert('공기구를 선택하세요.'); return; }
+
+        if (type === '반출') item.status = '수리중';
+        if (type === '반납') item.status = '양호';
+
+        historyLogs.push({ id: 'thist_' + Date.now(), date, corp: item.corp, team: item.team, type, code: item.code, name: item.name, worker: worker || '현장 작업자' });
+        await saveData(); renderApp();
+        alert('반출입/점검 내역이 등록되었습니다.');
+    }
+
+    function goToHistoryOf(name, code) {
+        selectedHistoryCode = code;
+        const item = inventory.find(i => i.code === code);
+        if (item) renderToolDetailCard(item);
+        document.querySelectorAll('.sidebar .tab-link')[2].click(); renderApp();
+    }
+
+    function renderToolDetailCard(item) {
+        const container = document.getElementById('tool-detail-card-container');
+        container.style.display = 'block';
+
+        document.getElementById('card-code').innerText = item.code;
+        document.getElementById('card-name').innerText = item.name + (item.spec ? ` (${item.spec})` : '');
+        document.getElementById('card-spec').innerText = item.spec || '-';
+        document.getElementById('card-maker').innerText = item.maker || '-';
+        document.getElementById('card-qty').innerText = item.qty;
+        document.getElementById('card-date').innerText = item.date;
+        document.getElementById('card-status').innerText = item.status;
+
+        const imgEl = document.getElementById('card-tool-img');
+        const noImgEl = document.getElementById('card-no-img');
+
+        if (item.img) { imgEl.src = item.img; imgEl.style.display = 'block'; noImgEl.style.display = 'none'; }
+        else { imgEl.style.display = 'none'; noImgEl.style.display = 'block'; }
+
+        const reportsListContainer = document.getElementById('saved-reports-list');
+        if (!item.reportsList || item.reportsList.length === 0) {
+            reportsListContainer.innerHTML = `<span style="font-size: 13px; color: #64748b;">작성 및 저장된 손망실 보고서가 없습니다.</span>`;
+        } else {
+            reportsListContainer.innerHTML = item.reportsList.map((rep, idx) => `
+                <div style="display: flex; justify-content: space-between; align-items: center; background: white; padding: 6px 10px; border-radius: 6px; border: 1px solid #e2e8f0; font-size: 13px;">
+                    <div><strong>[제 ${idx + 1}회차 보고서]</strong> &nbsp; 작성일: ${rep.date} &nbsp;|&nbsp; 구분: <span style="color:#e11d48; font-weight:bold;">${rep.lossType}</span> &nbsp;|&nbsp; 담당자: ${rep.personName}</div>
+                    <div style="display: flex; gap: 4px;">
+                        <button class="btn-action" style="background-color: #0284c7; color: white; padding: 3px 8px; font-size: 11.5px;" onclick="openLossReportModalByIndex(${idx})">📄 보기/출력</button>
+                        <button class="btn-action" style="background-color: #ef4444; color: white; padding: 3px 8px; font-size: 11.5px;" onclick="deleteReportByIndex('${item.code}', ${idx})">🗑️ 삭제</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+    }
+
+    async function deleteReportByIndex(code, idx) {
+        if (isReadOnlyHistoryMode) {
+            alert('⚠️ 과거 백업 조회 모드에서는 보고서 삭제가 차단됩니다.');
+            return;
+        }
+        if (confirm(`해당 손망실 보고서를 삭제하시겠습니까?\n(💡 연관된 손망실 이력도 삭제함으로 이동하며 보유 수량이 원상복구됩니다)`)) {
+            let item = inventory.find(i => i.code === code);
+            if (item && item.reportsList && item.reportsList[idx]) {
+                const removedReport = item.reportsList.splice(idx, 1)[0];
+                removedReport.deletedAt = new Date().toLocaleString();
+                deletedReportsList.push(removedReport);
+
+                const hIdx = historyLogs.findIndex(h => h.code === code && h.type === '손망실');
+                if (hIdx > -1) {
+                    const removedHist = historyLogs.splice(hIdx, 1)[0];
+                    removedHist.deletedAt = new Date().toLocaleString();
+                    deletedHistoryLogs.push(removedHist);
+
+                    const match = removedHist.worker ? removedHist.worker.match(/(\d+)개\s*차감/) : null;
+                    const restoredQty = match ? parseInt(match[1]) : 1;
+                    item.qty += restoredQty;
+                    if (item.qty > 0 && (item.status === '폐기' || item.status === '정상/손망실(폐기)')) {
+                        item.status = '양호';
+                    }
+                }
+
+                await saveData(); 
+                renderToolDetailCard(item); 
+                renderApp();
+                alert('손망실 보고서와 연관 이력이 보관함으로 이동되고 수량이 복원되었습니다.');
+            }
+        }
+    }
+
+    function clearHistoryFilter() { selectedHistoryCode = null; document.getElementById('tool-detail-card-container').style.display = 'none'; renderApp(); }
+
+    async function deleteItem(code, name) {
+        if (isReadOnlyHistoryMode) {
+            alert('⚠️ 과거 백업 조회 모드에서는 삭제가 차단됩니다.');
+            return;
+        }
+        if (confirm(`[${name}] 공기구를 삭제하시겠습니까?`)) {
+            const idx = inventory.findIndex(i => i.code === code);
+            if (idx > -1) {
+                const item = inventory.splice(idx, 1)[0];
+                item.deletedAt = new Date().toLocaleString();
+                deletedInventoryItems.push(item);
+                await saveData(); renderApp();
+            }
+        }
+    }
+
+    async function deleteHistoryItem(id) {
+        if (isReadOnlyHistoryMode) {
+            alert('⚠️ 과거 백업 조회 모드에서는 삭제가 차단됩니다.');
+            return;
+        }
+        const idx = historyLogs.findIndex(h => h.id === id);
+        if (idx > -1) {
+            const h = historyLogs.splice(idx, 1)[0];
+            h.deletedAt = new Date().toLocaleString();
+            deletedHistoryLogs.push(h);
+
+            if (h.type === '손망실') {
+                const item = inventory.find(i => i.code === h.code);
+                if (item) {
+                    const match = h.worker ? h.worker.match(/(\d+)개\s*차감/) : null;
+                    const restoredQty = match ? parseInt(match[1]) : 1;
+                    item.qty += restoredQty;
+                    if (item.qty > 0 && (item.status === '폐기' || item.status === '정상/손망실(폐기)')) {
+                        item.status = '양호';
+                    }
+
+                    if (item.reportsList && item.reportsList.length > 0) {
+                        const repIdx = item.reportsList.findIndex(r => r.code === h.code || r.lossType);
+                        if (repIdx > -1) {
+                            const removedRep = item.reportsList.splice(repIdx, 1)[0];
+                            removedRep.deletedAt = new Date().toLocaleString();
+                            deletedReportsList.push(removedRep);
+                        }
+                    }
+                }
+            }
+
+            await saveData(); 
+            renderApp();
+            if (selectedHistoryCode === h.code) {
+                const item = inventory.find(i => i.code === h.code);
+                if (item) renderToolDetailCard(item);
+            }
+        }
+    }
+
+    function openRestoreModal() {
+        const tbody = document.getElementById('restore-modal-body');
+        tbody.innerHTML = deletedHistoryLogs.map(h => `
+            <tr>
+                <td><input type="checkbox" class="row-checkbox restore-checkbox" value="${h.id}"></td>
+                <td>${h.deletedAt}</td><td>${h.date}</td><td><span class="${h.corp==='아태'?'badge-corp-at':'badge-corp-kift'}">${h.corp}</span></td><td>${h.team}</td><td>${h.type}</td><td>${h.code}</td><td>${h.name}</td><td>${h.worker}</td>
+            </tr>
+        `).join('') || '<tr><td colspan="9">삭제된 이력이 없습니다.</td></tr>';
+        document.getElementById('restoreModal').style.display = 'flex';
+    }
+    function closeRestoreModal() { document.getElementById('restoreModal').style.display = 'none'; }
+    
+    async function restoreSelectedHistory() {
+        if (isReadOnlyHistoryMode) {
+            alert('⚠️ 과거 백업 조회 모드에서는 복원이 차단됩니다.');
+            return;
+        }
+        const selectedCbs = document.querySelectorAll('.restore-checkbox:checked');
+        if (selectedCbs.length === 0) { alert('복원할 항목을 선택해 주세요.'); return; }
+
+        selectedCbs.forEach(cb => {
+            const idx = deletedHistoryLogs.findIndex(h => h.id === cb.value);
+            if (idx > -1) {
+                const h = deletedHistoryLogs.splice(idx, 1)[0];
+                historyLogs.push(h);
+
+                if (h.type === '손망실') {
+                    const item = inventory.find(i => i.code === h.code);
+                    if (item) {
+                        const match = h.worker ? h.worker.match(/(\d+)개\s*차감/) : null;
+                        const deductQty = match ? parseInt(match[1]) : 1;
+                        item.qty = Math.max(0, item.qty - deductQty);
+                        if (item.qty === 0) item.status = '폐기';
+                        else item.status = '정상/손망실(폐기)';
+
+                        const repIdx = deletedReportsList.findIndex(r => r.code === h.code);
+                        if (repIdx > -1) {
+                            const restoredRep = deletedReportsList.splice(repIdx, 1)[0];
+                            if (!item.reportsList) item.reportsList = [];
+                            item.reportsList.push(restoredRep);
+                        }
+                    }
+                }
+            }
+        });
+
+        await saveData(); 
+        renderApp(); 
+        closeRestoreModal(); 
+
+        if (selectedHistoryCode) {
+            let currentItem = inventory.find(i => i.code === selectedHistoryCode);
+            if (currentItem) renderToolDetailCard(currentItem);
+        }
+
+        alert('손망실 이력과 연관 보고서가 함께 성공적으로 복원되었습니다.');
+    }
+
+    async function permanentlyDeleteSelectedHistory() {
+        const selectedCbs = document.querySelectorAll('.restore-checkbox:checked');
+        if (selectedCbs.length === 0) { alert('영구 삭제할 항목을 선택해 주세요.'); return; }
+
+        if (confirm(`선택한 ${selectedCbs.length}개의 이력을 보관함에서 완전히 삭제하시겠습니까?\n(영구 삭제 후에는 복구할 수 없습니다)`)) {
+            selectedCbs.forEach(cb => {
+                const idx = deletedHistoryLogs.findIndex(h => h.id === cb.value);
+                if (idx > -1) deletedHistoryLogs.splice(idx, 1);
+            });
+            await saveData();
+            openRestoreModal();
+            alert('보관함에서 완전히 삭제되었습니다.');
+        }
+    }
+
+    function openInvRestoreModal() {
+        const tbody = document.getElementById('inv-restore-modal-body');
+        tbody.innerHTML = deletedInventoryItems.map(i => `
+            <tr>
+                <td><input type="checkbox" class="row-checkbox inv-restore-checkbox" value="${i.code}"></td>
+                <td>${i.deletedAt}</td><td><span class="${i.corp==='아태'?'badge-corp-at':'badge-corp-kift'}">${i.corp}</span></td><td>${i.team}</td><td>${i.code}</td><td>${i.name}</td><td>${i.spec}</td><td>${i.maker}</td><td>${i.status}</td>
+            </tr>
+        `).join('') || '<tr><td colspan="9">삭제된 공기구가 없습니다.</td></tr>';
+        document.getElementById('invRestoreModal').style.display = 'flex';
+    }
+    function closeInvRestoreModal() { document.getElementById('invRestoreModal').style.display = 'none'; }
+    
+    async function restoreSelectedInvItems() {
+        if (isReadOnlyHistoryMode) {
+            alert('⚠️ 과거 백업 조회 모드에서는 복원이 차단됩니다.');
+            return;
+        }
+        const selectedCbs = document.querySelectorAll('.inv-restore-checkbox:checked');
+        if (selectedCbs.length === 0) { alert('복원할 항목을 선택해 주세요.'); return; }
+
+        selectedCbs.forEach(cb => {
+            const idx = deletedInventoryItems.findIndex(i => i.code === cb.value);
+            if (idx > -1) inventory.push(deletedInventoryItems.splice(idx, 1)[0]);
+        });
+        await saveData(); renderApp(); closeInvRestoreModal(); alert('복원되었습니다.');
+    }
+
+    async function permanentlyDeleteSelectedInvItems() {
+        const selectedCbs = document.querySelectorAll('.inv-restore-checkbox:checked');
+        if (selectedCbs.length === 0) { alert('영구 삭제할 항목을 선택해 주세요.'); return; }
+
+        if (confirm(`선택한 ${selectedCbs.length}개의 공기구를 보관함에서 완전히 삭제하시겠습니까?\n(영구 삭제 후에는 복구할 수 없습니다)`)) {
+            selectedCbs.forEach(cb => {
+                const idx = deletedInventoryItems.findIndex(i => i.code === cb.value);
+                if (idx > -1) deletedInventoryItems.splice(idx, 1);
+            });
+            await saveData();
+            openInvRestoreModal();
+            alert('보관함에서 완전히 삭제되었습니다.');
+        }
+    }
+
+    function openReportRestoreModal() {
+        const tbody = document.getElementById('report-restore-modal-body');
+        tbody.innerHTML = deletedReportsList.map(rep => `
+            <tr>
+                <td><input type="checkbox" class="row-checkbox report-restore-checkbox" value="${rep.id}"></td>
+                <td>${rep.deletedAt || '-'}</td>
+                <td>${rep.date}</td>
+                <td>${rep.code || '-'}</td>
+                <td>${rep.itemName || '-'}</td>
+                <td><span style="color:#e11d48; font-weight:bold;">${rep.lossType}</span></td>
+                <td>${rep.personName}</td>
+            </tr>
+        `).join('') || '<tr><td colspan="7" style="padding:20px; color:#94a3b8;">삭제된 손망실 보고서가 없습니다.</td></tr>';
+        document.getElementById('reportRestoreModal').style.display = 'flex';
+    }
+
+    function closeReportRestoreModal() { document.getElementById('reportRestoreModal').style.display = 'none'; }
+    function toggleAllReportRestoreCheckboxes(s) { document.querySelectorAll('.report-restore-checkbox').forEach(c => c.checked = s.checked); }
+
+    async function restoreSelectedReports() {
+        if (isReadOnlyHistoryMode) {
+            alert('⚠️ 과거 백업 조회 모드에서는 복원이 차단됩니다.');
+            return;
+        }
+        const selectedCbs = document.querySelectorAll('.report-restore-checkbox:checked');
+        if (selectedCbs.length === 0) { alert('복원할 보고서를 선택해 주세요.'); return; }
+
+        selectedCbs.forEach(cb => {
+            const idx = deletedReportsList.findIndex(r => r.id === cb.value);
+            if (idx > -1) {
+                const restoredReport = deletedReportsList.splice(idx, 1)[0];
+                let item = inventory.find(i => i.code === restoredReport.code);
+                if (item) {
+                    if (!item.reportsList) item.reportsList = [];
+                    item.reportsList.push(restoredReport);
+
+                    const hIdx = deletedHistoryLogs.findIndex(h => h.code === restoredReport.code && h.type === '손망실');
+                    if (hIdx > -1) {
+                        const restoredHist = deletedHistoryLogs.splice(hIdx, 1)[0];
+                        historyLogs.push(restoredHist);
+
+                        const match = restoredHist.worker ? restoredHist.worker.match(/(\d+)개\s*차감/) : null;
+                        const deductQty = match ? parseInt(match[1]) : 1;
+                        item.qty = Math.max(0, item.qty - deductQty);
+                        if (item.qty === 0) item.status = '폐기';
+                        else item.status = '정상/손망실(폐기)';
+                    }
+                }
+            }
+        });
+        await saveData();
+        renderApp();
+        if (selectedHistoryCode) {
+            let item = inventory.find(i => i.code === selectedHistoryCode);
+            if (item) renderToolDetailCard(item);
+        }
+        closeReportRestoreModal();
+        alert('선택한 손망실 보고서와 연관 이력이 정상적으로 함께 복원되었습니다.');
+    }
+
+    async function permanentlyDeleteSelectedReports() {
+        const selectedCbs = document.querySelectorAll('.report-restore-checkbox:checked');
+        if (selectedCbs.length === 0) { alert('영구 삭제할 보고서를 선택해 주세요.'); return; }
+
+        if (confirm(`선택한 ${selectedCbs.length}개의 손망실 보고서를 완전 삭제하시겠습니까?\n(영구 삭제 후에는 복구할 수 없습니다)`)) {
+            selectedCbs.forEach(cb => {
+                const idx = deletedReportsList.findIndex(r => r.id === cb.value);
+                if (idx > -1) deletedReportsList.splice(idx, 1);
+            });
+            await saveData();
+            openReportRestoreModal();
+            alert('보관함에서 완전히 삭제되었습니다.');
+        }
+    }
+
+    function renderApp() {
+        let filtered = inventory;
+        let activeTeam = currentTeamSession !== 'ALL' ? currentTeamSession : document.getElementById('filter-team-inv').value;
+        if (activeTeam !== 'ALL') filtered = filtered.filter(i => i.team === activeTeam);
+        if (corpFilters.inv !== 'ALL') filtered = filtered.filter(i => i.corp === corpFilters.inv);
+
+        const query = document.getElementById('inventory-search').value.toLowerCase();
+        if (query) filtered = filtered.filter(i => i.name.toLowerCase().includes(query) || i.code.toLowerCase().includes(query));
+
+        filtered.sort((a, b) => (a.code || a.name).localeCompare(b.code || b.name, undefined, { numeric: true, sensitivity: 'base' }));
+
+        const tbody = document.getElementById('inventory-body');
+        tbody.innerHTML = filtered.map(i => {
+            let statBadge = `<span class="status-badge status-good">${i.status}</span>`;
+            if (i.status === '수리중') statBadge = `<span class="status-badge status-repair">${i.status}</span>`;
+            else if (i.status === '폐기') statBadge = `<span class="status-badge status-disposed">${i.status}</span>`;
+            else if (i.status === '정상/손망실(폐기)') statBadge = `<span class="status-badge status-partial-loss">${i.status}</span>`;
+
+            let corpBadge = i.corp === '아태' ? '<span class="badge-corp-at">아태</span>' : '<span class="badge-corp-kift">KIFT</span>';
+
+            return `
+                <tr>
+                    <td class="checkbox-cell"><input type="checkbox" class="row-checkbox item-checkbox" value="${i.code}"></td>
+                    <td>${corpBadge}</td>
+                    <td><strong>${i.team}</strong></td>
+                    <td>${i.code}</td>
+                    <td style="text-align: center;">
+                        <span class="item-link" onclick="goToHistoryOf('${i.name}', '${i.code}')">${i.name}</span>
+                    </td>
+                    <td>${i.spec}</td>
+                    <td>${i.qty}</td>
+                    <td>${i.maker}</td>
+                    <td>${i.date}</td>
+                    <td>${statBadge}</td>
+                    <td class="col-action" style="padding-right: 15px;">
+                        <div class="action-cell">
+                            <button class="btn-edit" onclick="editItem('${i.code}')">수정</button>
+                            <button class="btn-delete" onclick="deleteItem('${i.code}', '${i.name}')">삭제</button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('') || '<tr><td colspan="11" style="padding:30px; color:#94a3b8;">등록된 공기구가 없습니다.</td></tr>';
+
+        const qSelect = document.getElementById('quick-trans-item');
+
+        if (selectedHistoryCode) {
+            const singleItem = inventory.find(i => i.code === selectedHistoryCode);
+            if (singleItem) {
+                qSelect.innerHTML = `<option value="${singleItem.code}">[${singleItem.corp}/${singleItem.team}] ${singleItem.name} (${singleItem.code})</option>`;
+                qSelect.value = singleItem.code;
+            } else {
+                qSelect.innerHTML = '<option>선택된 공기구 없음</option>';
+            }
+        } else {
+            let dropdownBase = inventory;
+            if (activeTeam !== 'ALL') dropdownBase = dropdownBase.filter(i => i.team === activeTeam);
+            if (corpFilters.inv !== 'ALL') dropdownBase = dropdownBase.filter(i => i.corp === corpFilters.inv);
+
+            dropdownBase.sort((a, b) => (a.code || a.name).localeCompare(b.code || b.name, undefined, { numeric: true, sensitivity: 'base' }));
+            qSelect.innerHTML = dropdownBase.map(i => `<option value="${i.code}">[${i.corp}/${i.team}] ${i.name} (${i.code})</option>`).join('') || '<option>등록된 공기구 없음</option>';
+        }
+
+        document.getElementById('dash-total-items').innerText = filtered.length;
+        document.getElementById('dash-good-items').innerText = filtered.filter(i => i.status === '양호').length;
+        document.getElementById('dash-repair-items').innerText = filtered.filter(i => i.status === '수리중' || i.status === '정상/손망실(폐기)').length;
+
+        renderHistory(); renderPeriodSearch();
+    }
+
+    function renderHistory() {
+        let filtered = historyLogs;
+        let activeTeam = currentTeamSession !== 'ALL' ? currentTeamSession : document.getElementById('filter-team-hist').value;
+        if (activeTeam !== 'ALL') filtered = filtered.filter(h => h.team === activeTeam);
+        if (corpFilters.hist !== 'ALL') filtered = filtered.filter(h => h.corp === corpFilters.hist);
+        if (selectedHistoryCode) filtered = filtered.filter(h => h.code === selectedHistoryCode);
+
+        const query = document.getElementById('history-search').value.toLowerCase();
+        if (query) filtered = filtered.filter(h => h.name.toLowerCase().includes(query) || h.worker.toLowerCase().includes(query));
+
+        const fType = document.getElementById('filter-type').value;
+        if (fType !== 'all') filtered = filtered.filter(h => h.type === fType);
+
+        const sortO = document.getElementById('sort-date').value;
+        filtered.sort((a,b) => sortO === 'asc' ? new Date(a.date) - new Date(b.date) : new Date(b.date) - new Date(a.date));
+
+        const tbody = document.getElementById('history-body');
+        tbody.innerHTML = filtered.map(h => {
+            let badge = h.type === '반출' ? '<span class="badge-out">반출</span>' : (h.type === '반납' ? '<span class="badge-in">반납</span>' : (h.type === '손망실' ? '<span class="badge-loss">손망실</span>' : '<span class="status-badge" style="background:#e0f2fe;color:#0369a1;">점검</span>'));
+            let corpBadge = h.corp === '아태' ? '<span class="badge-corp-at">아태</span>' : '<span class="badge-corp-kift">KIFT</span>';
+            return `
+                <tr>
+                    <td class="checkbox-cell"><input type="checkbox" class="row-checkbox history-checkbox" value="${h.id}"></td>
+                    <td>${h.date}</td><td>${corpBadge}</td><td><strong>${h.team}</strong></td><td>${badge}</td><td>${h.code}</td><td style="text-align: center; font-weight:bold;">${h.name}</td><td>${h.worker}</td>
+                    <td class="col-action" style="padding-right: 15px;">
+                        <div class="action-cell"><button class="btn-delete" onclick="deleteHistoryItem('${h.id}')">삭제</button></div>
+                    </td>
+                </tr>
+            `;
+        }).join('') || '<tr><td colspan="9" style="padding:30px; color:#94a3b8;">이력이 없습니다.</td></tr>';
+    }
+
+    function renderPeriodSearch() {
+        let filtered = historyLogs;
+        let activeTeam = currentTeamSession !== 'ALL' ? currentTeamSession : document.getElementById('filter-team-period').value;
+        if (activeTeam !== 'ALL') filtered = filtered.filter(h => h.team === activeTeam);
+        if (corpFilters.period !== 'ALL') filtered = filtered.filter(h => h.corp === corpFilters.period);
+
+        const start = document.getElementById('search-start-date').value;
+        const end = document.getElementById('search-end-date').value;
+        const type = document.getElementById('search-period-type').value;
+        const keyword = document.getElementById('search-period-keyword').value.toLowerCase();
+
+        if (start) filtered = filtered.filter(h => h.date >= start);
+        if (end) filtered = filtered.filter(h => h.date <= end);
+        if (type !== 'all') filtered = filtered.filter(h => h.type === type);
+        if (keyword) filtered = filtered.filter(h => h.name.toLowerCase().includes(keyword) || h.code.toLowerCase().includes(keyword));
+
+        const tbody = document.getElementById('period-search-body');
+        tbody.innerHTML = filtered.map(h => {
+            let corpBadge = h.corp === '아태' ? '<span class="badge-corp-at">아태</span>' : '<span class="badge-corp-kift">KIFT</span>';
+            return `
+                <tr><td>${h.date}</td><td>${corpBadge}</td><td><strong>${h.team}</strong></td><td>${h.type}</td><td>${h.code}</td><td style="text-align: center; font-weight:bold;">${h.name}</td><td>${h.worker}</td></tr>
+            `;
+        }).join('') || '<tr><td colspan="7" style="color:#94a3b8; padding:30px;">조회 조건을 설정한 후 검색 버튼을 눌러주세요.</td></tr>';
+    }
+
+    function toggleAllCheckboxes(s) { document.querySelectorAll('.item-checkbox').forEach(c => c.checked = s.checked); }
+    function toggleAllHistoryCheckboxes(s) { document.querySelectorAll('.history-checkbox').forEach(c => c.checked = s.checked); }
+    function toggleAllRestoreCheckboxes(s) { document.querySelectorAll('.restore-checkbox').forEach(c => c.checked = s.checked); }
+    function toggleAllInvRestoreCheckboxes(s) { document.querySelectorAll('.inv-restore-checkbox').forEach(c => c.checked = s.checked); }
+
+    async function deleteSelectedItems() {
+        if (isReadOnlyHistoryMode) {
+            alert('⚠️ 과거 백업 조회 모드에서는 삭제가 차단됩니다.');
+            return;
+        }
+        document.querySelectorAll('.item-checkbox:checked').forEach(cb => {
+            const idx = inventory.findIndex(i => i.code === cb.value);
+            if (idx > -1) {
+                const item = inventory.splice(idx, 1)[0];
+                item.deletedAt = new Date().toLocaleString();
+                deletedInventoryItems.push(item);
+            }
+        });
+        await saveData(); renderApp(); alert('선택한 공기구가 삭제되었습니다.');
+    }
+
+    async function deleteSelectedHistory() {
+        if (isReadOnlyHistoryMode) {
+            alert('⚠️ 과거 백업 조회 모드에서는 삭제가 차단됩니다.');
+            return;
+        }
+        document.querySelectorAll('.history-checkbox:checked').forEach(cb => {
+            const idx = historyLogs.findIndex(h => h.id === cb.value);
+            if (idx > -1) {
+                const h = historyLogs.splice(idx, 1)[0];
+                h.deletedAt = new Date().toLocaleString();
+                deletedHistoryLogs.push(h);
+
+                if (h.type === '손망실') {
+                    const item = inventory.find(i => i.code === h.code);
+                    if (item) {
+                        const match = h.worker ? h.worker.match(/(\d+)개\s*차감/) : null;
+                        const restoredQty = match ? parseInt(match[1]) : 1;
+                        
+                        item.qty += restoredQty;
+                        if (item.qty > 0 && (item.status === '폐기' || item.status === '정상/손망실(폐기)')) {
+                            item.status = '양호';
+                        }
+
+                        if (item.reportsList && item.reportsList.length > 0) {
+                            const repIdx = item.reportsList.findIndex(r => r.code === h.code || r.lossType);
+                            if (repIdx > -1) {
+                                const removedRep = item.reportsList.splice(repIdx, 1)[0];
+                                removedRep.deletedAt = new Date().toLocaleString();
+                                deletedReportsList.push(removedRep);
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        await saveData(); renderApp(); alert('선택한 이력이 삭제되었습니다.');
+    }
+
+    function openTab(evt, tabName) {
+        document.querySelectorAll(".tab-content").forEach(c => { c.style.display = "none"; c.classList.remove("active"); });
+        document.querySelectorAll(".tab-link").forEach(l => l.classList.remove("active"));
+        document.getElementById(tabName).style.display = "block";
+        document.getElementById(tabName).classList.add("active");
+        if (evt) evt.currentTarget.classList.add("active");
+        if (tabName === 'PeriodSearch') renderPeriodSearch();
+    }
+
+    renderApp();
+</script>
+</body>
+</html>
