@@ -1442,7 +1442,7 @@
                 deletedInventoryItems = data.deletedInventoryItems || [];
                 deletedReportsList = data.deletedReportsList || [];
 
-                // 💡 분리된 개별 이미지 불러오기
+                // 💡 개별 문서로 분리된 사진 불러오기
                 for (let item of inventory) {
                     try {
                         const imgDoc = await store.collection('tool_images').doc(item.code).get();
@@ -1502,10 +1502,9 @@
         try {
             isUpdatingFromRemote = true;
             
-            // 💡 메인 대장 데이터 복사 (img 필드는 용량 분리를 위해 제외하고 저장)
             let cleanInventory = inventory.map(item => {
                 let copy = { ...item };
-                delete copy.img; // 이미지는 별도 컬렉션으로 분리 저장
+                delete copy.img; 
                 return copy;
             });
 
@@ -1519,7 +1518,6 @@
                 console.warn("로컬 용량 초과:", e);
             }
 
-            // 💡 메인 문서는 순수 텍스트만 저장하여 1MB 제한 원천 차단
             await store.collection('tool_system').doc('main_data').set({
                 inventory: cleanInventory,
                 historyLogs: historyLogs,
@@ -1886,7 +1884,8 @@
                 let width = img.width;
                 let height = img.height;
                 
-                const MAX_SIZE = 300; 
+                // 💡 화질을 대폭 개선한 최적화 해상도 (450px)
+                const MAX_SIZE = 450; 
                 if (width > height) {
                     if (width > MAX_SIZE) { height *= MAX_SIZE / width; width = MAX_SIZE; }
                 } else {
@@ -1897,7 +1896,8 @@
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, width, height);
                 
-                const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.3);
+                // 💡 화질을 선명하게 높여주는 압축률 (0.45)
+                const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.45);
                 callback(compressedDataUrl);
             };
             img.src = e.target.result;
@@ -1914,7 +1914,6 @@
             if (item) {
                 item.img = base64Img;
                 
-                // 💡 개별 이미지 전용 문서에 즉시 단독 저장 (용량 제한 회피)
                 try {
                     await store.collection('tool_images').doc(item.code).set({ img: base64Img });
                 } catch (err) {
@@ -1923,7 +1922,7 @@
 
                 await saveData(); 
                 renderToolDetailCard(item);
-                alert('📸 사진이 개별 클라우드 저장소에 즉시 안전하게 저장되었습니다.');
+                alert('📸 선명한 화질의 사진이 개별 클라우드 저장소에 즉시 안전하게 저장되었습니다.');
             }
         });
         event.target.value = '';
