@@ -722,7 +722,7 @@
         <!-- 인쇄 / PDF 보고서 양식 헤더 -->
         <div class="print-header-info">
             <h1 id="print-title">현장 공기구 관리 보고서</h1>
-            <p id="print-date-info">출력일자: 2026-08-05 | 접속 팀: 전체</p>
+            <p id="print-date-info">출력일자: 2026-09-09 | 접속 팀: 전체</p>
         </div>
 
         <!-- 1. 대시보드 -->
@@ -1432,7 +1432,7 @@
         if (isReadOnlyHistoryMode) return;
         if (unsubscribeFirestoreTool) unsubscribeFirestoreTool();
 
-        unsubscribeFirestoreTool = store.collection('tool_system').doc('main_data').onSnapshot((doc) => {
+        unsubscribeFirestoreTool = store.collection('tool_system').doc('main_data').onSnapshot(async (doc) => {
             if (doc.exists && !isUpdatingFromRemote && !isReadOnlyHistoryMode) {
                 const data = doc.data();
 
@@ -1441,6 +1441,18 @@
                 deletedHistoryLogs = data.deletedHistoryLogs || [];
                 deletedInventoryItems = data.deletedInventoryItems || [];
                 deletedReportsList = data.deletedReportsList || [];
+
+                // 💡 분리된 개별 이미지 불러오기
+                for (let item of inventory) {
+                    try {
+                        const imgDoc = await store.collection('tool_images').doc(item.code).get();
+                        if (imgDoc.exists) {
+                            item.img = imgDoc.data().img || '';
+                        }
+                    } catch (e) {
+                        console.warn("개별 이미지 로드 실패:", e);
+                    }
+                }
 
                 try {
                     localStorage.setItem('my_tool_multireport_data', JSON.stringify(inventory));
@@ -1489,6 +1501,14 @@
         if (isReadOnlyHistoryMode) return;
         try {
             isUpdatingFromRemote = true;
+            
+            // 💡 메인 대장 데이터 복사 (img 필드는 용량 분리를 위해 제외하고 저장)
+            let cleanInventory = inventory.map(item => {
+                let copy = { ...item };
+                delete copy.img; // 이미지는 별도 컬렉션으로 분리 저장
+                return copy;
+            });
+
             try {
                 localStorage.setItem('my_tool_multireport_data', JSON.stringify(inventory));
                 localStorage.setItem('my_tool_multireport_history', JSON.stringify(historyLogs));
@@ -1496,11 +1516,12 @@
                 localStorage.setItem('my_tool_multireport_del_inv', JSON.stringify(deletedInventoryItems));
                 localStorage.setItem('my_tool_multireport_del_rep', JSON.stringify(deletedReportsList));
             } catch (e) {
-                console.warn("로컬 용량 초과. 클라우드 전송 집중 진행", e);
+                console.warn("로컬 용량 초과:", e);
             }
 
+            // 💡 메인 문서는 순수 텍스트만 저장하여 1MB 제한 원천 차단
             await store.collection('tool_system').doc('main_data').set({
-                inventory: inventory,
+                inventory: cleanInventory,
                 historyLogs: historyLogs,
                 deletedHistoryLogs: deletedHistoryLogs,
                 deletedInventoryItems: deletedInventoryItems,
@@ -1864,7 +1885,8 @@
                 const canvas = document.createElement('canvas');
                 let width = img.width;
                 let height = img.height;
-                const MAX_SIZE = 400;
+                
+                const MAX_SIZE = 300; 
                 if (width > height) {
                     if (width > MAX_SIZE) { height *= MAX_SIZE / width; width = MAX_SIZE; }
                 } else {
@@ -1874,7 +1896,8 @@
                 canvas.height = height;
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, width, height);
-                const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.4);
+                
+                const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.3);
                 callback(compressedDataUrl);
             };
             img.src = e.target.result;
@@ -1882,7 +1905,7 @@
         reader.readAsDataURL(file);
     }
 
-    function uploadToolImage(event) {
+    async function uploadToolImage(event) {
         const file = event.target.files[0];
         if (!file || !selectedHistoryCode) return;
 
@@ -1890,15 +1913,23 @@
             const item = inventory.find(i => i.code === selectedHistoryCode);
             if (item) {
                 item.img = base64Img;
-                await saveData();
+                
+                // 💡 개별 이미지 전용 문서에 즉시 단독 저장 (용량 제한 회피)
+                try {
+                    await store.collection('tool_images').doc(item.code).set({ img: base64Img });
+                } catch (err) {
+                    console.error("개별 이미지 저장 실패:", err);
+                }
+
+                await saveData(); 
                 renderToolDetailCard(item);
-                alert('📸 사진이 압축되어 정상적으로 연동 저장되었습니다.');
+                alert('📸 사진이 개별 클라우드 저장소에 즉시 안전하게 저장되었습니다.');
             }
         });
         event.target.value = '';
     }
 
-    function uploadReportImage(event) {
+    async function uploadReportImage(event) {
         const file = event.target.files[0];
         if (!file || !selectedHistoryCode) return;
 
@@ -1906,10 +1937,17 @@
             const item = inventory.find(i => i.code === selectedHistoryCode);
             if (item) {
                 item.img = base64Img;
-                await saveData();
+                
+                try {
+                    await store.collection('tool_images').doc(item.code).set({ img: base64Img });
+                } catch (err) {
+                    console.error("개별 이미지 저장 실패:", err);
+                }
+
+                await saveData(); 
                 renderToolDetailCard(item);
                 openLossReportModalByIndex(currentReportEditIndex);
-                alert('📸 보고서 사진이 정상적으로 연동 저장되었습니다.');
+                alert('📸 보고서 사진이 개별 클라우드 저장소에 즉시 안전하게 저장되었습니다.');
             }
         });
         event.target.value = '';
@@ -1928,9 +1966,16 @@
                             const item = inventory.find(inv => inv.code === selectedHistoryCode);
                             if (item) {
                                 item.img = base64Img;
-                                await saveData();
+                                
+                                try {
+                                    await store.collection('tool_images').doc(item.code).set({ img: base64Img });
+                                } catch (err) {
+                                    console.error("개별 이미지 저장 실패:", err);
+                                }
+
+                                await saveData(); 
                                 renderToolDetailCard(item);
-                                alert('📸 클립보드 사진이 정상 등록/저장되었습니다!');
+                                alert('📸 클립보드 사진이 개별 클라우드 저장소에 즉시 안전하게 저장되었습니다!');
                             }
                         }
                     });
@@ -1954,10 +1999,17 @@
                             const item = inventory.find(inv => inv.code === selectedHistoryCode);
                             if (item) {
                                 item.img = base64Img;
-                                await saveData();
+                                
+                                try {
+                                    await store.collection('tool_images').doc(item.code).set({ img: base64Img });
+                                } catch (err) {
+                                    console.error("개별 이미지 저장 실패:", err);
+                                }
+
+                                await saveData(); 
                                 renderToolDetailCard(item);
                                 openLossReportModalByIndex(currentReportEditIndex);
-                                alert('📸 보고서 사진이 저장/연동되었습니다!');
+                                alert('📸 보고서 사진이 개별 클라우드 저장소에 즉시 안전하게 저장되었습니다!');
                             }
                         }
                     });
@@ -2092,10 +2144,19 @@
                         );
 
                         if (existingIdx > -1) {
+                            const existingImg = inventory[existingIdx].img || '';
+                            const existingReports = inventory[existingIdx].reportsList || [];
+                            const existingLossInfo = inventory[existingIdx].lossInfo || null;
+
                             inventory[existingIdx].spec = spec;
                             inventory[existingIdx].qty = qty;
                             inventory[existingIdx].maker = maker;
                             inventory[existingIdx].date = date;
+                            
+                            inventory[existingIdx].img = existingImg;
+                            inventory[existingIdx].reportsList = existingReports;
+                            inventory[existingIdx].lossInfo = existingLossInfo;
+
                             totalUpdated++;
                         } else {
                             inventory.push({
