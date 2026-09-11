@@ -418,6 +418,9 @@
             overflow: hidden;
             box-shadow: 0 4px 6px rgba(0,0,0,0.05);
             outline: none;
+            margin-bottom: 15px;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
         }
         .tool-card-table {
             width: 60%;
@@ -473,17 +476,6 @@
             background: #0f172a;
         }
 
-        .loss-report-modal {
-            display: none;
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(15, 23, 42, 0.7);
-            z-index: 10000;
-            align-items: center;
-            justify-content: center;
-            overflow-y: auto;
-            padding: 10px 0;
-        }
         .loss-report-sheet {
             background: white;
             width: 210mm;
@@ -493,10 +485,13 @@
             position: relative;
             box-sizing: border-box;
             color: #000;
-            margin: auto;
+            margin: auto auto 20px auto;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
+            border: 1px solid #000;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
         }
         .report-header-table, .report-content-table {
             width: 100%;
@@ -535,37 +530,38 @@
             height: 50px !important;
         }
 
-        .report-img-box {
-            width: 100%;
-            height: 100%;
-            min-height: 250px;
-            display: flex;
-            flex-direction: column;
+        /* 🪟 보관함 모달 팝업 공통 스타일 정의 (노출 오류 방지) */
+        #restoreModal, #invRestoreModal, #reportRestoreModal, #lossReportModal {
+            display: none;
+            position: fixed;
+            top: 0; 
+            left: 0; 
+            width: 100vw; 
+            height: 100vh;
+            background: rgba(15, 23, 42, 0.7);
+            z-index: 10000;
             align-items: center;
             justify-content: center;
-            cursor: pointer;
-            outline: none;
-            position: relative;
-        }
-        .report-img-box:focus {
-            background-color: #f0fdf4;
+            padding: 20px;
         }
 
-        .modal-overlay {
-            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(3px); z-index: 9999;
-            align-items: center; justify-content: center;
-        }
         .modal-content {
-            background: white; padding: 25px; border-radius: 12px; width: 90%;
-            max-width: 950px; max-height: 80vh; overflow-y: auto; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);
+            background: white;
+            width: 90%;
+            max-width: 900px;
+            max-height: 85vh;
+            overflow-y: auto;
+            padding: 20px 25px;
+            border-radius: 10px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+            box-sizing: border-box;
         }
 
         .print-header-info { display: none; }
         .print-header-info h1 { margin: 0 0 6px 0; font-size: 20px; color: #0f172a; }
         .print-header-info p { margin: 0; font-size: 12px; color: #64748b; }
 
-        /* 🖨️ 포털 안에서 인쇄 시 다중 페이지 자동 분할 및 버튼 숨김 처리 CSS */
+        /* 🖨️ 인쇄 시 손망실 보고서 및 카드 연속 출력 스타일 보완 */
         @media print {
             * {
                 -webkit-print-color-adjust: exact !important;
@@ -607,6 +603,25 @@
                 display: block !important;
             }
 
+            .loss-report-sheet {
+                width: 100% !important;
+                height: auto !important;
+                max-height: none !important;
+                padding: 5mm 10mm !important;
+                margin-bottom: 0 !important;
+                page-break-after: always !important;
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+                box-shadow: none !important;
+                border: 1px solid #000;
+            }
+
+            .tool-card-wrapper {
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+                margin-bottom: 15px !important;
+            }
+
             table {
                 width: 100% !important;
                 table-layout: fixed !important;
@@ -617,44 +632,11 @@
 
             tr {
                 page-break-inside: avoid !important;
-                break-inside: avoid !important;
                 page-break-after: auto !important;
             }
 
-            thead {
-                display: table-header-group !important;
-            }
-
             th, td {
-                padding: 6px 4px !important;
-                border: 1px solid #333 !important;
-            }
-
-            th {
-                background-color: #f1f5f9 !important;
-                color: #000 !important;
-            }
-
-            .status-badge, .badge-corp-at, .badge-corp-kift, .badge-out, .badge-in, .badge-loss {
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
-            }
-
-            body.is-printing-report * { visibility: hidden; }
-            body.is-printing-report .loss-report-sheet, body.is-printing-report .loss-report-sheet * { visibility: visible; }
-            body.is-printing-report .loss-report-modal {
-                position: absolute; left: 0; top: 0; background: white; display: flex !important; padding: 0; overflow: hidden; width: 100%; height: 100%;
-            }
-            body.is-printing-report .loss-report-sheet {
-                box-shadow: none; 
-                width: 100% !important; 
-                height: 100% !important;
-                max-height: 275mm !important;
-                padding: 5mm 8mm !important; 
-                margin: 0 !important; 
-                overflow: hidden !important;
-                page-break-after: avoid !important; 
-                page-break-inside: avoid !important;
+                border: 1px solid #000 !important;
             }
 
             body:not(.is-printing-report) .print-header-info { display: block !important; margin-bottom: 15px; border-bottom: 2px solid #000; padding-bottom: 10px; }
@@ -715,6 +697,7 @@
         <button class="tab-link active" onclick="openTab(event, 'Dashboard')">📊 대시보드</button>
         <button class="tab-link" onclick="openTab(event, 'Inventory')">📋 공기구 보유 목록</button>
         <button class="tab-link" onclick="openTab(event, 'History')">📜 반출입 및 점검 이력</button>
+        <button class="tab-link" onclick="openTab(event, 'AllCards')">📑 팀별 상세카드 모아보기</button>
         <button class="tab-link" onclick="openTab(event, 'PeriodSearch')">📅 기간별 종합 검색</button>
     </div>
 
@@ -722,7 +705,7 @@
         <!-- 인쇄 / PDF 보고서 양식 헤더 -->
         <div class="print-header-info">
             <h1 id="print-title">현장 공기구 관리 보고서</h1>
-            <p id="print-date-info">출력일자: 2026-09-09 | 접속 팀: 전체</p>
+            <p id="print-date-info">출력일자: 2026-09-11 | 접속 팀: 전체</p>
         </div>
 
         <!-- 1. 대시보드 -->
@@ -969,7 +952,45 @@
             </table>
         </div>
 
-        <!-- 4. 기간별 종합 검색 -->
+        <!-- 4. 팀별 상세카드 모아보기 -->
+        <div id="AllCards" class="tab-content">
+            <h2>
+                팀별 상세카드 모아보기 <span class="team-badge" id="cards-team-badge">전체 보기</span>
+                <div style="display: flex; gap: 6px;">
+                    <button class="btn-action btn-print" onclick="printCurrentTab('팀별 공기구 상세 관리카드 모음')">🖨️ 인쇄</button>
+                    <button class="btn-action btn-pdf" onclick="printCurrentTab('팀별 공기구 상세 관리카드 모음')">📄 PDF 저장</button>
+                </div>
+            </h2>
+
+            <div class="corp-sub-tabs" style="background-color: #f1f5f9; padding: 12px; border-radius: 8px; border: 1px solid #cbd5e1; margin-bottom: 20px;">
+                <div>
+                    🏢 <strong>출력/조회 팀 선택:</strong>
+                    <select id="filter-team-cards" class="quick-input-balanced" style="height: 38px; width: 160px;" onchange="renderAllCardsTab()">
+                        <option value="ALL">전체 팀</option>
+                        <option value="전기팀">전기팀</option>
+                        <option value="소방팀">소방팀</option>
+                        <option value="설비팀">설비팀</option>
+                        <option value="건축팀">건축팀</option>
+                        <option value="점검팀">점검팀</option>
+                        <option value="냉동">냉동</option>
+                        <option value="운송">운송</option>
+                        <option value="미화팀">미화팀</option>
+                    </select>
+                </div>
+                <div style="display: flex; gap: 6px;" id="cards-filter-buttons">
+                    <button class="corp-tab-btn active" onclick="setCorpFilter('ALL', 'cards', this)">전체보기</button>
+                    <button class="corp-tab-btn" onclick="setCorpFilter('아태', 'cards', this)">🟦 아태보기</button>
+                    <button class="corp-tab-btn" onclick="setCorpFilter('KIFT', 'cards', this)">🟧 KIFT보기</button>
+                    <button class="corp-tab-btn" onclick="setCorpFilter('LOSS', 'cards', this)" style="background-color:#e11d48; color:white; border-color:#e11d48;">🛑 손망실 대장 보기</button>
+                </div>
+            </div>
+
+            <div id="all-cards-container" style="display: flex; flex-direction: column; gap: 25px;">
+                <!-- 동적으로 생성되는 공기구 상세 카드 또는 손망실 보고서 목록 -->
+            </div>
+        </div>
+
+        <!-- 5. 기간별 종합 검색 -->
         <div id="PeriodSearch" class="tab-content">
             <h2>
                 기간별 종합 검색 <span class="team-badge" id="period-team-badge">전체 보기</span>
@@ -1043,8 +1064,8 @@
 </div>
 
 <!-- 📄 손망실 보고서 모달 -->
-<div id="lossReportModal" class="loss-report-modal">
-    <div class="loss-report-sheet">
+<div id="lossReportModal">
+    <div class="loss-report-sheet" style="margin: auto; max-height: 90vh; overflow-y: auto;">
         <div>
             <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px;">
                 <div>
@@ -1169,7 +1190,7 @@
 </div>
 
 <!-- 삭제된 이력 복원 모달 -->
-<div id="restoreModal" class="modal-overlay">
+<div id="restoreModal">
     <div class="modal-content">
         <h2>🗑️ 삭제된 이력 보관함 <button class="btn-action" style="background-color:#64748b; color:white; font-size:13px;" onclick="closeRestoreModal()">✕ 닫기</button></h2>
         <div style="margin-bottom: 12px; display:flex; justify-content:space-between; align-items:center;">
@@ -1199,7 +1220,7 @@
 </div>
 
 <!-- 삭제된 공기구 목록 복원 모달 -->
-<div id="invRestoreModal" class="modal-overlay">
+<div id="invRestoreModal">
     <div class="modal-content">
         <h2>📋 삭제된 공기구 보관함 <button class="btn-action" style="background-color:#64748b; color:white; font-size:13px;" onclick="closeInvRestoreModal()">✕ 닫기</button></h2>
         <div style="margin-bottom: 12px; display:flex; justify-content:space-between; align-items:center;">
@@ -1229,7 +1250,7 @@
 </div>
 
 <!-- 📑 삭제된 손망실 보고서 보관함 모달 -->
-<div id="reportRestoreModal" class="modal-overlay">
+<div id="reportRestoreModal">
     <div class="modal-content">
         <h2>📑 삭제된 손망실 보고서 보관함 <button class="btn-action" style="background-color:#64748b; color:white; font-size:13px;" onclick="closeReportRestoreModal()">✕ 닫기</button></h2>
         <div style="margin-bottom: 12px; display:flex; justify-content:space-between; align-items:center;">
@@ -1319,13 +1340,14 @@
             const teamSelectEl = document.getElementById('current-team-select');
             if (teamSelectEl) teamSelectEl.value = teamParam;
             const badgeText = currentTeamSession === 'ALL' ? '전체 보기' : `${currentTeamSession} 전용`;
-            ['dash-team-badge','inv-team-badge','hist-team-badge','period-team-badge'].forEach(id => {
+            ['dash-team-badge','inv-team-badge','hist-team-badge','cards-team-badge','period-team-badge'].forEach(id => {
                 const el = document.getElementById(id);
                 if(el) el.innerText = badgeText;
             });
             if (currentTeamSession !== 'ALL') {
                 document.getElementById('filter-team-inv').value = currentTeamSession;
                 document.getElementById('filter-team-hist').value = currentTeamSession;
+                document.getElementById('filter-team-cards').value = currentTeamSession;
                 document.getElementById('filter-team-period').value = currentTeamSession;
             }
             if (typeof renderApp === 'function') renderApp();
@@ -1442,7 +1464,6 @@
                 deletedInventoryItems = data.deletedInventoryItems || [];
                 deletedReportsList = data.deletedReportsList || [];
 
-                // 💡 개별 문서로 분리된 사진 불러오기
                 for (let item of inventory) {
                     try {
                         const imgDoc = await store.collection('tool_images').doc(item.code).get();
@@ -1488,7 +1509,7 @@
     });
 
     let currentTeamSession = 'ALL';
-    let corpFilters = { inv: 'ALL', hist: 'ALL', period: 'ALL' };
+    let corpFilters = { inv: 'ALL', hist: 'ALL', cards: 'ALL', period: 'ALL' };
     let selectedHistoryCode = null;
     let lastLossType = '폐기';
     let currentReportEditIndex = null;
@@ -1884,7 +1905,6 @@
                 let width = img.width;
                 let height = img.height;
                 
-                // 💡 화질을 대폭 개선한 최적화 해상도 (450px)
                 const MAX_SIZE = 450; 
                 if (width > height) {
                     if (width > MAX_SIZE) { height *= MAX_SIZE / width; width = MAX_SIZE; }
@@ -1896,7 +1916,6 @@
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, width, height);
                 
-                // 💡 화질을 선명하게 높여주는 압축률 (0.45)
                 const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.45);
                 callback(compressedDataUrl);
             };
@@ -2192,7 +2211,7 @@
     function changeTeam() {
         currentTeamSession = document.getElementById('current-team-select').value;
         const badgeText = currentTeamSession === 'ALL' ? '전체 보기' : `${currentTeamSession} 전용`;
-        ['dash-team-badge','inv-team-badge','hist-team-badge','period-team-badge'].forEach(id => {
+        ['dash-team-badge','inv-team-badge','hist-team-badge','cards-team-badge','period-team-badge'].forEach(id => {
             const el = document.getElementById(id); if(id === 'dash-team-badge' && currentTeamSession === 'ALL') el.innerText = '전체 보기';
             else if(el) el.innerText = badgeText;
         });
@@ -2200,6 +2219,7 @@
         if (currentTeamSession !== 'ALL') {
             document.getElementById('filter-team-inv').value = currentTeamSession;
             document.getElementById('filter-team-hist').value = currentTeamSession;
+            document.getElementById('filter-team-cards').value = currentTeamSession;
             document.getElementById('filter-team-period').value = currentTeamSession;
         }
 
@@ -2214,6 +2234,7 @@
 
         if (tabKey === 'inv') renderApp();
         else if (tabKey === 'hist') renderHistory();
+        else if (tabKey === 'cards') renderAllCardsTab();
         else if (tabKey === 'period') renderPeriodSearch();
     }
 
@@ -2276,6 +2297,183 @@
                     </div>
                 </div>
             `).join('');
+        }
+    }
+
+    function renderAllCardsTab() {
+        let list = inventory;
+        const activeTeam = document.getElementById('filter-team-cards').value;
+        if (activeTeam !== 'ALL') list = list.filter(i => i.team === activeTeam);
+        
+        const container = document.getElementById('all-cards-container');
+
+        if (corpFilters.cards === 'LOSS') {
+            let lossItems = list.filter(i => (i.lossInfo && i.lossInfo.qty > 0) || (i.reportsList && i.reportsList.length > 0) || i.status === '폐기' || i.status === '정상/손망실(폐기)');
+            
+            if (lossItems.length === 0) {
+                container.innerHTML = `<div style="padding:40px; text-align:center; color:#94a3b8; font-size:14px;">조건에 해당하는 손망실 내역이 없습니다.</div>`;
+                return;
+            }
+
+            container.innerHTML = lossItems.map(item => {
+                let targetRep = (item.reportsList && item.reportsList.length > 0) ? item.reportsList[0] : null;
+
+                let lossTypeStr = targetRep ? targetRep.lossType : (item.lossInfo ? item.lossInfo.type : '폐기');
+                let personName = targetRep ? targetRep.personName : '홍길동';
+                let managerName = targetRep ? targetRep.managerName : '김영배';
+                let reportDateStr = targetRep ? targetRep.date : `${item.date} 발생`;
+
+                let activeImg = targetRep ? targetRep.img : item.img;
+                let imgTag = activeImg ? `<img src="${activeImg}" style="max-width:100%; max-height:280px; object-fit:contain;">` : `<span style="color: #666; font-size: 12px;">[등록된 실물 사진 없음]</span>`;
+
+                return `
+                    <div class="loss-report-sheet">
+                        <div>
+                            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px;">
+                                <div>
+                                    <span style="font-size: 12px; color: #333;">${item.corp === '아태' ? '아태산업개발주식회사' : 'KIFT 주식회사'}</span>
+                                    <h2 style="margin: 4px 0 0 0; font-size: 22px; border:none; padding:0; letter-spacing: 2px; color:#000;">손 망 실 보 고 서</h2>
+                                </div>
+                                <table class="approval-box">
+                                    <tr>
+                                        <th rowspan="2" style="width: 25px; font-size:11px;">결<br>재</th>
+                                        <th style="width: 65px;">담당</th>
+                                        <th style="width: 65px;">검토</th>
+                                        <th style="width: 65px;">확인</th>
+                                    </tr>
+                                    <tr>
+                                        <td class="approval-td-box"></td>
+                                        <td class="approval-td-box"></td>
+                                        <td class="approval-td-box"></td>
+                                    </tr>
+                                </table>
+                            </div>
+
+                            <table class="report-header-table" style="margin-bottom: 8px;">
+                                <tr>
+                                    <td style="text-align: left; font-size: 12px;"><strong>해당 부서:</strong> ${item.team}</td>
+                                    <td style="text-align: right; font-size: 12px;"><strong>문서번호:</strong> ${item.team.replace('팀','')} A - ${item.code.split('-').pop()}</td>
+                                </tr>
+                            </table>
+
+                            <div style="font-weight: bold; margin-bottom: 4px; font-size: 12px;">1. 사고내역</div>
+                            <table class="report-content-table">
+                                <tr>
+                                    <th style="width: 20%;">구 분</th>
+                                    <td style="text-align: left; padding-left: 15px;">
+                                        분실( [ ${lossTypeStr==='분실'?'O':' '} ] ), 훼손 수리가능( [ ${lossTypeStr==='훼손 수리가능'?'O':' '} ] ), 훼손 수리불가능( [ ${lossTypeStr==='훼손 수리불가능'?'O':' '} ] ), 폐기( [ ${lossTypeStr==='폐기'||lossTypeStr.includes('폐기')?'O':' '} ] )
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th>발생일시</th>
+                                    <td style="text-align: left; padding-left: 15px;">${reportDateStr}</td>
+                                </tr>
+                                <tr>
+                                    <th>발생장소</th>
+                                    <td style="text-align: left; padding-left: 15px;">현장 현업 사무실 / 작업장</td>
+                                </tr>
+                            </table>
+
+                            <div style="font-weight: bold; margin-bottom: 4px; font-size: 12px;">2. 망실 및 훼손 인적사항</div>
+                            <table class="report-content-table">
+                                <tr>
+                                    <th style="width: 15%;">부 서</th>
+                                    <td style="width: 35%;">${item.team}</td>
+                                    <th style="width: 15%;">직 위</th>
+                                    <td style="width: 35%;">담당자 / 반장</td>
+                                </tr>
+                                <tr>
+                                    <th>성 명</th>
+                                    <td>${personName}</td>
+                                    <th>관리책임자</th>
+                                    <td>${managerName}</td>
+                                </tr>
+                            </table>
+
+                            <div style="font-weight: bold; margin-bottom: 4px; font-size: 12px;">3. 대상 공기구 내역</div>
+                            <table class="report-content-table">
+                                <thead>
+                                    <tr>
+                                        <th>관리번호</th>
+                                        <th>품 명</th>
+                                        <th>규 격</th>
+                                        <th>수 량</th>
+                                        <th>비 고</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>${item.code}</td>
+                                        <td>${item.name}</td>
+                                        <td>${item.spec || '-'}</td>
+                                        <td>${item.qty}</td>
+                                        <td>손망실 발생</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+
+                            <div style="font-weight: bold; margin-bottom: 4px; font-size: 12px;">4. 사고 개요 및 사진</div>
+                            <table class="report-content-table" style="height: 240px;">
+                                <tr>
+                                    <td style="width: 50%; vertical-align: top; text-align: left; padding: 12px; line-height: 1.6; font-size: 12px;">
+                                        <strong>[사고 개요 및 내용]</strong><br>관리번호 [${item.code}] ${item.name} 장비의 ${lossTypeStr} 발생으로 인한 보고 건.
+                                    </td>
+                                    <td style="width: 50%; vertical-align: middle; text-align: center; padding: 6px; background: #fafafa;">
+                                        ${imgTag}
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
+
+                        <div style="margin-top: 15px;">
+                            <div style="text-align: center; margin: 15px 0 10px 0; font-size: 14px; font-weight: bold;">
+                                위의 내용이 거짓이 아님을 확인합니다.
+                            </div>
+
+                            <div style="text-align: center; margin-bottom: 20px; font-size: 12px;">
+                                ${new Date().getFullYear()} 년 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 월 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 일
+                            </div>
+
+                            <div style="text-align: right; font-size: 13px; padding-right: 50px;">
+                                <strong>성명 :</strong> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; (인)
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        } else {
+            // 일반 팀별 상세 카드 모아보기 모드
+            if (corpFilters.cards !== 'ALL') list = list.filter(i => i.corp === corpFilters.cards);
+            list.sort((a, b) => (a.code || a.name).localeCompare(b.code || b.name, undefined, { numeric: true, sensitivity: 'base' }));
+
+            if (list.length === 0) {
+                container.innerHTML = `<div style="padding:40px; text-align:center; color:#94a3b8; font-size:14px;">조건에 해당하는 공기구가 없습니다.</div>`;
+                return;
+            }
+
+            container.innerHTML = list.map(item => {
+                let imgTag = item.img ? `<img src="${item.img}" style="max-width:100%; max-height:180px; object-fit:contain; border-radius:4px;">` : `<span style="color: white; font-size: 13px;">등록된 사진 없음</span>`;
+
+                return `
+                    <div style="margin-bottom: 5px; font-size: 13px; font-weight: bold; color: #334155;">
+                        [${item.corp}] ${item.team} - 관리번호: ${item.code}
+                    </div>
+                    <div class="tool-card-wrapper">
+                        <table class="tool-card-table">
+                            <tr><th>관 리 번 호</th><td>${item.code}</td></tr>
+                            <tr><th>품 명</th><td>${item.name}</td></tr>
+                            <tr><th>규 격</th><td>${item.spec || '-'}</td></tr>
+                            <tr><th>제 조 사</th><td>${item.maker || '-'}</td></tr>
+                            <tr><th>수 량</th><td>${item.qty}</td></tr>
+                            <tr><th>구 입 일</th><td>${item.date}</td></tr>
+                            <tr><th>상 태</th><td>${item.status}</td></tr>
+                        </table>
+                        <div class="tool-card-img-box" style="cursor: default;">
+                            ${imgTag}
+                        </div>
+                    </div>
+                `;
+            }).join('');
         }
     }
 
@@ -2629,7 +2827,9 @@
         document.getElementById('dash-good-items').innerText = filtered.filter(i => i.status === '양호').length;
         document.getElementById('dash-repair-items').innerText = filtered.filter(i => i.status === '수리중' || i.status === '정상/손망실(폐기)').length;
 
-        renderHistory(); renderPeriodSearch();
+        renderHistory(); 
+        renderAllCardsTab();
+        renderPeriodSearch();
     }
 
     function renderHistory() {
@@ -2754,6 +2954,7 @@
         document.getElementById(tabName).style.display = "block";
         document.getElementById(tabName).classList.add("active");
         if (evt) evt.currentTarget.classList.add("active");
+        if (tabName === 'AllCards') renderAllCardsTab();
         if (tabName === 'PeriodSearch') renderPeriodSearch();
     }
 
