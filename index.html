@@ -1144,7 +1144,7 @@
                         <td id="report-item-code">-</td>
                         <td id="report-item-name">-</td>
                         <td id="report-item-spec">-</td>
-                        <td id="report-item-qty">-</td>
+                        <td><input type="text" id="input-item-qty" value="1" style="border:none; text-align:center; width:100%; font-family:inherit; font-size:12px; background:transparent; font-weight:bold;"></td>
                         <td id="report-item-reason">손망실 발생</td>
                     </tr>
                 </tbody>
@@ -1595,6 +1595,7 @@
 
         const personName = document.getElementById('input-person-name').value;
         const managerName = document.getElementById('input-manager-name').value;
+        const lossQtyInput = document.getElementById('input-item-qty').value;
         const repImgSrc = document.getElementById('report-img').src;
         const hasImg = document.getElementById('report-img').style.display !== 'none' ? repImgSrc : '';
 
@@ -1605,6 +1606,7 @@
             date: new Date().toLocaleDateString(),
             personName: personName,
             managerName: managerName,
+            lossQty: lossQtyInput,
             lossType: lastLossType,
             img: hasImg
         };
@@ -1866,7 +1868,6 @@
         document.getElementById('report-item-code').innerText = item.code;
         document.getElementById('report-item-name').innerText = item.name;
         document.getElementById('report-item-spec').innerText = item.spec || '-';
-        document.getElementById('report-item-qty').innerText = item.qty;
         document.getElementById('report-print-date').innerText = `${new Date().getFullYear()} 년 ${new Date().getMonth()+1} 월 ${new Date().getDate()} 일`;
 
         if (idx !== null && item.reportsList && item.reportsList[idx]) {
@@ -1874,6 +1875,7 @@
             const rep = item.reportsList[idx];
             document.getElementById('input-person-name').value = rep.personName || '홍길동';
             document.getElementById('input-manager-name').value = rep.managerName || '김영배';
+            document.getElementById('input-item-qty').value = (rep.lossQty !== undefined && rep.lossQty !== null && rep.lossQty !== '') ? rep.lossQty : item.qty;
             lastLossType = rep.lossType || lastLossType;
             
             const repImg = document.getElementById('report-img');
@@ -1882,6 +1884,7 @@
             else { repImg.style.display = 'none'; noRepImg.style.display = 'block'; }
         } else {
             currentReportEditIndex = null;
+            document.getElementById('input-item-qty').value = item.qty;
             const repImg = document.getElementById('report-img');
             const noRepImg = document.getElementById('report-no-photo');
             if (item.img) { repImg.src = item.img; repImg.style.display = 'block'; noRepImg.style.display = 'none'; }
@@ -2321,6 +2324,7 @@
                 let lossTypeStr = targetRep ? targetRep.lossType : (item.lossInfo ? item.lossInfo.type : '폐기');
                 let personName = targetRep ? targetRep.personName : '홍길동';
                 let managerName = targetRep ? targetRep.managerName : '김영배';
+                let reportQty = targetRep && targetRep.lossQty !== undefined ? targetRep.lossQty : item.qty;
                 let reportDateStr = targetRep ? targetRep.date : `${item.date} 발생`;
 
                 let activeImg = targetRep ? targetRep.img : item.img;
@@ -2406,7 +2410,7 @@
                                         <td>${item.code}</td>
                                         <td>${item.name}</td>
                                         <td>${item.spec || '-'}</td>
-                                        <td>${item.qty}</td>
+                                        <td>${reportQty}</td>
                                         <td>손망실 발생</td>
                                     </tr>
                                 </tbody>
