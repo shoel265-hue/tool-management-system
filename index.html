@@ -418,7 +418,7 @@
             overflow: hidden;
             box-shadow: 0 4px 6px rgba(0,0,0,0.05);
             outline: none;
-            margin-bottom: 15px;
+            margin-bottom: 12px;
             page-break-inside: avoid !important;
             break-inside: avoid !important;
         }
@@ -429,16 +429,16 @@
         .tool-card-table th {
             background-color: #f1f5f9;
             border: 1px solid #cbd5e1;
-            padding: 10px;
+            padding: 6px 8px;
             width: 35%;
-            font-size: 13px;
+            font-size: 12px;
             color: #334155;
             text-align: center;
         }
         .tool-card-table td {
             border: 1px solid #cbd5e1;
-            padding: 10px;
-            font-size: 14px;
+            padding: 6px 8px;
+            font-size: 13px;
             font-weight: bold;
             color: #0f172a;
             text-align: center;
@@ -453,21 +453,21 @@
             align-items: center;
             justify-content: center;
             position: relative;
-            padding: 10px;
+            padding: 6px;
             cursor: pointer;
         }
         .tool-card-img-box img {
             max-width: 100%;
-            max-height: 180px;
+            max-height: 130px;
             object-fit: contain;
             border-radius: 4px;
         }
         .img-upload-label {
-            margin-top: 8px;
+            margin-top: 4px;
             background: rgba(15, 23, 42, 0.8);
             color: white;
-            padding: 4px 10px;
-            font-size: 12px;
+            padding: 2px 8px;
+            font-size: 10.5px;
             border-radius: 4px;
             cursor: pointer;
             display: inline-block;
@@ -476,20 +476,22 @@
             background: #0f172a;
         }
 
+        /* 🛡️ 손망실 보고서 시트 간격 및 테두리 정돈 */
         .loss-report-sheet {
             background: white;
             width: 210mm;
-            max-height: 285mm;
-            padding: 12mm 15mm;
+            min-height: 275mm;
+            padding: 12mm 15mm 12mm 15mm; 
             box-shadow: 0 0 20px rgba(0,0,0,0.3);
             position: relative;
             box-sizing: border-box;
             color: #000;
-            margin: auto auto 20px auto;
+            margin: auto auto 25px auto;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
-            border: 1px solid #000;
+            border: 2px solid #000 !important;
+            page-break-before: auto !important;
             page-break-inside: avoid !important;
             break-inside: avoid !important;
         }
@@ -530,7 +532,7 @@
             height: 50px !important;
         }
 
-        /* 🪟 보관함 모달 팝업 공통 스타일 정의 (노출 오류 방지) */
+        /* 🪟 보관함 모달 팝업 공통 스타일 정의 */
         #restoreModal, #invRestoreModal, #reportRestoreModal, #lossReportModal {
             display: none;
             position: fixed;
@@ -543,6 +545,12 @@
             align-items: center;
             justify-content: center;
             padding: 20px;
+            overflow-y: auto !important;
+        }
+
+        #lossReportModal {
+            align-items: flex-start !important;
+            padding: 30px 10px !important;
         }
 
         .modal-content {
@@ -561,7 +569,7 @@
         .print-header-info h1 { margin: 0 0 6px 0; font-size: 20px; color: #0f172a; }
         .print-header-info p { margin: 0; font-size: 12px; color: #64748b; }
 
-        /* 🖨️ 인쇄 시 손망실 보고서 및 카드 연속 출력 스타일 보완 */
+        /* 🖨️ 인쇄 시 레이아웃 제어 설정 */
         @media print {
             * {
                 -webkit-print-color-adjust: exact !important;
@@ -578,17 +586,82 @@
                 background: #fff !important;
             }
 
-            .container {
+            .print-header-info {
+                display: none !important;
+            }
+
+            /* 🛡️ 모아보기 인쇄 시 상단 타이틀 숨김 */
+            #AllCards h2,
+            #AllCards .corp-sub-tabs {
+                display: none !important;
+            }
+
+            /* 🛡️ 사고 개요 및 내용 입력창 테두리 인쇄 제거 */
+            #input-loss-desc {
+                border: none !important;
+                background: transparent !important;
+                resize: none !important;
+                outline: none !important;
+            }
+
+            /* [상황 A] 손망실 보고서 모달 인쇄 시 */
+            body.is-printing-report-modal .container,
+            body.is-printing-report-modal .header,
+            body.is-printing-report-modal .sidebar,
+            body.is-printing-report-modal #login-overlay,
+            body.is-printing-report-modal #system-lock-overlay,
+            body.is-printing-report-modal #backup-readonly-banner,
+            body.is-printing-report-modal #restoreModal,
+            body.is-printing-report-modal #invRestoreModal,
+            body.is-printing-report-modal #reportRestoreModal,
+            body.is-printing-report-modal .no-print {
+                display: none !important;
+            }
+
+            body.is-printing-report-modal #lossReportModal {
+                display: block !important;
+                position: static !important;
+                width: 100% !important;
+                height: auto !important;
+                background: #fff !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                overflow: visible !important;
+                z-index: 999999 !important;
+            }
+
+            body.is-printing-report-modal #lossReportModal .loss-report-sheet {
+                width: 100% !important;
+                height: auto !important;
+                min-height: 270mm !important;
+                margin: 0 auto !important;
+                padding: 5mm !important;
+                box-shadow: none !important;
+                border: 2px solid #000 !important;
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+            }
+
+            /* [상황 B] 일반 탭 인쇄 시 */
+            body:not(.is-printing-report-modal) .sidebar, 
+            body:not(.is-printing-report-modal) .header, 
+            body:not(.is-printing-report-modal) .btn-action, 
+            body:not(.is-printing-report-modal) .corp-sub-tabs, 
+            body:not(.is-printing-report-modal) .search-bar-container, 
+            body:not(.is-printing-report-modal) .quick-transaction-bar, 
+            body:not(.is-printing-report-modal) .no-print, 
+            body:not(.is-printing-report-modal) #backup-readonly-banner,
+            body:not(.is-printing-report-modal) #lossReportModal {
+                display: none !important;
+            }
+
+            body:not(.is-printing-report-modal) .container {
                 display: block !important;
                 height: auto !important;
             }
 
-            .sidebar, .header, .btn-action, .corp-sub-tabs, .search-bar-container, .quick-transaction-bar, .no-print, #backup-readonly-banner {
-                display: none !important;
-            }
-
-            .main-content {
-                margin: 0 !important;
+            body:not(.is-printing-report-modal) .main-content {
+                margin: 0 auto !important;
                 padding: 0 !important;
                 width: 100% !important;
                 box-shadow: none !important;
@@ -596,29 +669,30 @@
                 height: auto !important;
             }
 
-            .tab-content {
+            body:not(.is-printing-report-modal) .tab-content {
                 display: none !important;
             }
-            .tab-content.active {
+            body:not(.is-printing-report-modal) .tab-content.active {
                 display: block !important;
             }
 
-            .loss-report-sheet {
-                width: 100% !important;
-                height: auto !important;
-                max-height: none !important;
-                padding: 5mm 10mm !important;
-                margin-bottom: 0 !important;
+            .card-item-container:nth-of-type(3n) {
                 page-break-after: always !important;
-                page-break-inside: avoid !important;
-                break-inside: avoid !important;
-                box-shadow: none !important;
-                border: 1px solid #000;
+                break-after: page !important;
             }
 
             .tool-card-wrapper {
                 page-break-inside: avoid !important;
                 break-inside: avoid !important;
+                margin-bottom: 12px !important;
+            }
+
+            .loss-report-sheet {
+                border: 2px solid #000 !important;
+                page-break-before: always !important;
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+                margin-top: 0 !important;
                 margin-bottom: 15px !important;
             }
 
@@ -638,8 +712,6 @@
             th, td {
                 border: 1px solid #000 !important;
             }
-
-            body:not(.is-printing-report) .print-header-info { display: block !important; margin-bottom: 15px; border-bottom: 2px solid #000; padding-bottom: 10px; }
         }
     </style>
 </head>
@@ -1065,7 +1137,7 @@
 
 <!-- 📄 손망실 보고서 모달 -->
 <div id="lossReportModal">
-    <div class="loss-report-sheet" style="margin: auto; max-height: 90vh; overflow-y: auto;">
+    <div class="loss-report-sheet" style="margin: auto; overflow-y: auto;">
         <div>
             <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px;">
                 <div>
@@ -1099,12 +1171,14 @@
                 <tr>
                     <th style="width: 20%;">구 분</th>
                     <td style="text-align: left; padding-left: 15px;" id="report-type-checks">
-                        분실( [ ] ), 훼손 수리가능( [ ] ), 훼손 수리불가능( [ ] ), 폐기( [ O ] )
+                        분실( [ ] ), 훼손 수리가능( [ ] ), 훼손 수리불가능( [ ] ), 폐기( [ X ] )
                     </td>
                 </tr>
                 <tr>
                     <th>발생일시</th>
-                    <td style="text-align: left; padding-left: 15px;" id="report-loss-date">2026년 ___월 ___일</td>
+                    <td style="text-align: left; padding-left: 15px;">
+                        <input type="text" id="input-loss-date-text" value="2026년 09월 17일" style="border:none; width:100%; font-family:inherit; font-size:12px; background:transparent;">
+                    </td>
                 </tr>
                 <tr>
                     <th>발생장소</th>
@@ -1158,9 +1232,11 @@
                         <textarea id="input-loss-desc" style="width: 100%; height: 215px; border: 1px solid #cbd5e1; border-radius: 4px; padding: 8px; font-family: inherit; font-size: 12px; resize: none; background: #fff;" placeholder="예시: 관리번호 [TOOL-설비-아태-019] 돌망치 장비 사용 중 낙하로 인한 헤드 파손 발생으로 폐기 처분함."></textarea>
                     </td>
                     <td style="width: 50%; vertical-align: middle; text-align: center; padding: 6px; background: #fafafa; position: relative; border: 1px solid #000; cursor: pointer;" onclick="checkAndUploadReportImg()">
-                        <div id="report-img-paste-box" class="report-img-box" tabindex="0" title="클릭 후 파일 선택 또는 Ctrl+V로 사진 붙여넣기 가능" style="width:100%; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center;">
-                            <span id="report-no-photo" style="color: #666; font-size: 12px;">[등록된 실물 사진 없음]<br><span style="font-size:10px; color:#3b82f6;">(클릭 또는 Ctrl+V 붙여넣기)</span></span>
-                            <img id="report-img" src="" style="max-width: 100%; max-height: 290px; object-fit: contain; display:none;" />
+                        <div id="report-img-paste-box" class="report-img-box" tabindex="0" title="클릭 후 파일 선택 또는 Ctrl+V로 사진 붙여넣기 가능" style="width:100%; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; position:relative;">
+                            <span id="report-no-photo" style="color: #666; font-size: 12px; display:none;">[등록된 실물 사진 없음]<br><span style="font-size:10px; color:#3b82f6;">(클릭 또는 Ctrl+V 붙여넣기)</span></span>
+                            <img id="report-img" src="" style="max-width: 100%; max-height: 290px; object-fit: contain; display:block;" />
+                            <!-- ❌ 단순 원형 X 버튼 (사진 삭제) -->
+                            <button type="button" onclick="event.stopPropagation(); removeReportImage();" title="사진 삭제" class="no-print" style="position: absolute; top: 6px; right: 6px; width: 26px; height: 26px; background: rgba(239, 68, 68, 0.9); color: white; border: none; border-radius: 50%; font-size: 14px; font-weight: bold; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 10; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">✕</button>
                         </div>
                         <input type="file" id="report-img-input" accept="image/*" style="display:none;" onchange="uploadReportImage(event)">
                     </td>
@@ -1174,7 +1250,7 @@
             </div>
 
             <div style="text-align: center; margin-bottom: 25px; font-size: 12px;" id="report-print-date">
-                2026 년 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 월 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 일
+                <input type="text" id="input-print-date-text" value="2026 년 9 월 17 일" style="border:none; text-align:center; width:220px; font-family:inherit; font-size:12px; background:transparent;">
             </div>
 
             <div style="text-align: right; font-size: 13px; padding-right: 50px; margin-bottom: 20px;">
@@ -1573,14 +1649,14 @@
         document.getElementById('print-title').innerText = `${teamLabel} - ${titleText}`;
         document.getElementById('print-date-info').innerText = `출력일자: ${new Date().toISOString().split('T')[0]} | 접속 팀: ${teamLabel}`;
         
-        document.body.classList.remove('is-printing-report');
+        document.body.classList.remove('is-printing-report-modal');
         window.print();
     }
 
     function printLossReport() {
-        document.body.classList.add('is-printing-report');
+        document.body.classList.add('is-printing-report-modal');
         window.print();
-        document.body.classList.remove('is-printing-report');
+        document.body.classList.remove('is-printing-report-modal');
     }
 
     async function saveLossReportData() {
@@ -1598,6 +1674,8 @@
         const managerName = document.getElementById('input-manager-name').value;
         const lossQtyInput = document.getElementById('input-item-qty').value;
         const lossDescText = document.getElementById('input-loss-desc').value;
+        const lossDateText = document.getElementById('input-loss-date-text').value;
+        const printDateText = document.getElementById('input-print-date-text').value;
         const repImgSrc = document.getElementById('report-img').src;
         const hasImg = document.getElementById('report-img').style.display !== 'none' ? repImgSrc : '';
 
@@ -1611,6 +1689,8 @@
             lossQty: lossQtyInput,
             lossType: lastLossType,
             lossDesc: lossDescText,
+            lossDateText: lossDateText,
+            printDateText: printDateText,
             img: hasImg
         };
 
@@ -1866,14 +1946,20 @@
         document.getElementById('report-corp-name').innerText = item.corp === '아태' ? '아태산업개발주식회사' : 'KIFT 주식회사';
         document.getElementById('report-team-name').innerText = item.team;
         document.getElementById('report-doc-no').innerText = `${item.team.replace('팀','')} A - ${item.code.split('-').pop()}`;
-        document.getElementById('report-loss-date').innerText = `${new Date().getFullYear()}년 ${String(new Date().getMonth()+1).padStart(2,'0')}월 ${String(new Date().getDate()).padStart(2,'0')}일`;
+        
+        const defaultDateStr = `${new Date().getFullYear()}년 ${String(new Date().getMonth()+1).padStart(2,'0')}월 ${String(new Date().getDate()).padStart(2,'0')}일`;
+        const defaultPrintDateStr = `${new Date().getFullYear()} 년 ${new Date().getMonth()+1} 월 ${new Date().getDate()} 일`;
+
         document.getElementById('report-person-team').innerText = item.team;
         document.getElementById('report-item-code').innerText = item.code;
         document.getElementById('report-item-name').innerText = item.name;
         document.getElementById('report-item-spec').innerText = item.spec || '-';
-        document.getElementById('report-print-date').innerText = `${new Date().getFullYear()} 년 ${new Date().getMonth()+1} 월 ${new Date().getDate()} 일`;
 
         const descTextarea = document.getElementById('input-loss-desc');
+        const lossDateInput = document.getElementById('input-loss-date-text');
+        const printDateInput = document.getElementById('input-print-date-text');
+        const repImg = document.getElementById('report-img');
+        const noRepImg = document.getElementById('report-no-photo');
 
         if (idx !== null && item.reportsList && item.reportsList[idx]) {
             currentReportEditIndex = idx;
@@ -1883,19 +1969,34 @@
             document.getElementById('input-item-qty').value = (rep.lossQty !== undefined && rep.lossQty !== null && rep.lossQty !== '') ? rep.lossQty : item.qty;
             lastLossType = rep.lossType || lastLossType;
             descTextarea.value = rep.lossDesc || `관리번호 [${item.code}] ${item.name} 장비의 ${lastLossType} 발생으로 인한 보고 건.`;
+            lossDateInput.value = rep.lossDateText || defaultDateStr;
+            printDateInput.value = rep.printDateText || defaultPrintDateStr;
             
-            const repImg = document.getElementById('report-img');
-            const noRepImg = document.getElementById('report-no-photo');
-            if (rep.img) { repImg.src = rep.img; repImg.style.display = 'block'; noRepImg.style.display = 'none'; }
-            else { repImg.style.display = 'none'; noRepImg.style.display = 'block'; }
+            if (rep.img) {
+                repImg.src = rep.img; 
+                repImg.style.display = 'block'; 
+                noRepImg.style.display = 'none';
+            } else {
+                repImg.src = '';
+                repImg.style.display = 'none'; 
+                noRepImg.style.display = 'block';
+            }
         } else {
             currentReportEditIndex = null;
             document.getElementById('input-item-qty').value = item.qty;
             descTextarea.value = `관리번호 [${item.code}] ${item.name} 장비의 ${lastLossType} 발생으로 인한 보고 건.`;
-            const repImg = document.getElementById('report-img');
-            const noRepImg = document.getElementById('report-no-photo');
-            if (item.img) { repImg.src = item.img; repImg.style.display = 'block'; noRepImg.style.display = 'none'; }
-            else { repImg.style.display = 'none'; noRepImg.style.display = 'block'; }
+            lossDateInput.value = defaultDateStr;
+            printDateInput.value = defaultPrintDateStr;
+            
+            if (item.img) { 
+                repImg.src = item.img; 
+                repImg.style.display = 'block'; 
+                noRepImg.style.display = 'none'; 
+            } else { 
+                repImg.src = '';
+                repImg.style.display = 'none'; 
+                noRepImg.style.display = 'block'; 
+            }
         }
 
         document.getElementById('report-type-checks').innerText = `분실( [ ${lastLossType==='분실'?'O':' '} ] ), 훼손 수리가능( [ ${lastLossType==='훼손 수리가능'?'O':' '} ] ), 훼손 수리불가능( [ ${lastLossType==='훼손 수리불가능'?'O':' '} ] ), 폐기( [ ${lastLossType==='폐기'?'O':' '} ] )`;
@@ -1958,26 +2059,26 @@
 
     async function uploadReportImage(event) {
         const file = event.target.files[0];
-        if (!file || !selectedHistoryCode) return;
+        if (!file) return;
 
-        compressAndResizeImage(file, async function(base64Img) {
-            const item = inventory.find(i => i.code === selectedHistoryCode);
-            if (item) {
-                item.img = base64Img;
-                
-                try {
-                    await store.collection('tool_images').doc(item.code).set({ img: base64Img });
-                } catch (err) {
-                    console.error("개별 이미지 저장 실패:", err);
-                }
-
-                await saveData(); 
-                renderToolDetailCard(item);
-                openLossReportModalByIndex(currentReportEditIndex);
-                alert('📸 보고서 사진이 개별 클라우드 저장소에 즉시 안전하게 저장되었습니다.');
-            }
+        compressAndResizeImage(file, function(base64Img) {
+            const repImg = document.getElementById('report-img');
+            const noRepImg = document.getElementById('report-no-photo');
+            repImg.src = base64Img;
+            repImg.style.display = 'block';
+            noRepImg.style.display = 'none';
         });
         event.target.value = '';
+    }
+
+    function removeReportImage() {
+        if (checkAdminRestriction()) return;
+        const repImg = document.getElementById('report-img');
+        const noRepImg = document.getElementById('report-no-photo');
+        repImg.src = '';
+        repImg.style.display = 'none';
+        noRepImg.style.display = 'block';
+        alert('🗑️ 보고서 사진이 삭제되었습니다. (상세카드 공기구 사진은 안전하게 유지됩니다)');
     }
 
     const pasteBox = document.getElementById('tool-paste-box');
@@ -2021,24 +2122,13 @@
             for (let i = 0; i < items.length; i++) {
                 if (items[i].type.indexOf('image') !== -1) {
                     const blob = items[i].getAsFile();
-                    compressAndResizeImage(blob, async function(base64Img) {
-                        if (selectedHistoryCode) {
-                            const item = inventory.find(inv => inv.code === selectedHistoryCode);
-                            if (item) {
-                                item.img = base64Img;
-                                
-                                try {
-                                    await store.collection('tool_images').doc(item.code).set({ img: base64Img });
-                                } catch (err) {
-                                    console.error("개별 이미지 저장 실패:", err);
-                                }
-
-                                await saveData(); 
-                                renderToolDetailCard(item);
-                                openLossReportModalByIndex(currentReportEditIndex);
-                                alert('📸 보고서 사진이 개별 클라우드 저장소에 즉시 안전하게 저장되었습니다!');
-                            }
-                        }
+                    compressAndResizeImage(blob, function(base64Img) {
+                        const repImg = document.getElementById('report-img');
+                        const noRepImg = document.getElementById('report-no-photo');
+                        repImg.src = base64Img;
+                        repImg.style.display = 'block';
+                        noRepImg.style.display = 'none';
+                        alert('📸 보고서에 사진이 붙여넣기 되었습니다!');
                     });
                     e.preventDefault();
                     break;
@@ -2317,21 +2407,28 @@
         const container = document.getElementById('all-cards-container');
 
         if (corpFilters.cards === 'LOSS') {
-            let lossItems = list.filter(i => (i.lossInfo && i.lossInfo.qty > 0) || (i.reportsList && i.reportsList.length > 0) || i.status === '폐기' || i.status === '정상/손망실(폐기)');
+            // 🛡️ 삭제된 보고서 보관함(deletedReportsList)에 있는 ID와 매칭되는 항목은 모아보기 손망실 대장에서 제외
+            let deletedRepIds = deletedReportsList.map(r => r.code);
+            let lossItems = list.filter(i => {
+                let hasValidReport = i.reportsList && i.reportsList.length > 0 && !i.reportsList.some(r => deletedRepIds.includes(r.code));
+                let hasLossFlag = (i.lossInfo && i.lossInfo.qty > 0) || i.status === '폐기' || i.status === '정상/손망실(폐기)';
+                return hasValidReport || (hasLossFlag && !deletedRepIds.includes(i.code));
+            });
             
             if (lossItems.length === 0) {
                 container.innerHTML = `<div style="padding:40px; text-align:center; color:#94a3b8; font-size:14px;">조건에 해당하는 손망실 내역이 없습니다.</div>`;
                 return;
             }
 
-            container.innerHTML = lossItems.map(item => {
+            container.innerHTML = lossItems.map((item, index) => {
                 let targetRep = (item.reportsList && item.reportsList.length > 0) ? item.reportsList[0] : null;
 
                 let lossTypeStr = targetRep ? targetRep.lossType : (item.lossInfo ? item.lossInfo.type : '폐기');
                 let personName = targetRep ? targetRep.personName : '홍길동';
                 let managerName = targetRep ? targetRep.managerName : '김영배';
                 let reportQty = targetRep && targetRep.lossQty !== undefined ? targetRep.lossQty : item.qty;
-                let reportDateStr = targetRep ? targetRep.date : `${item.date} 발생`;
+                let reportDateStr = targetRep ? (targetRep.lossDateText || targetRep.date) : `${item.date} 발생`;
+                let printDateStr = targetRep ? (targetRep.printDateText || `${new Date().getFullYear()} 년 ${new Date().getMonth()+1} 월 ${new Date().getDate()} 일`) : `${new Date().getFullYear()} 년 ${new Date().getMonth()+1} 월 ${new Date().getDate()} 일`;
                 let lossDescText = targetRep && targetRep.lossDesc ? targetRep.lossDesc : `관리번호 [${item.code}] ${item.name} 장비의 ${lossTypeStr} 발생으로 인한 보고 건.`;
 
                 let activeImg = targetRep ? targetRep.img : item.img;
@@ -2442,7 +2539,7 @@
                             </div>
 
                             <div style="text-align: center; margin-bottom: 20px; font-size: 12px;">
-                                ${new Date().getFullYear()} 년 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 월 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 일
+                                ${printDateStr}
                             </div>
 
                             <div style="text-align: right; font-size: 13px; padding-right: 50px;">
@@ -2461,25 +2558,27 @@
                 return;
             }
 
-            container.innerHTML = list.map(item => {
+            container.innerHTML = list.map((item, index) => {
                 let imgTag = item.img ? `<img src="${item.img}" style="max-width:100%; max-height:180px; object-fit:contain; border-radius:4px;">` : `<span style="color: white; font-size: 13px;">등록된 사진 없음</span>`;
 
                 return `
-                    <div style="margin-bottom: 5px; font-size: 13px; font-weight: bold; color: #334155;">
-                        [${item.corp}] ${item.team} - 관리번호: ${item.code}
-                    </div>
-                    <div class="tool-card-wrapper">
-                        <table class="tool-card-table">
-                            <tr><th>관 리 번 호</th><td>${item.code}</td></tr>
-                            <tr><th>품 명</th><td>${item.name}</td></tr>
-                            <tr><th>규 격</th><td>${item.spec || '-'}</td></tr>
-                            <tr><th>제 조 사</th><td>${item.maker || '-'}</td></tr>
-                            <tr><th>수 량</th><td>${item.qty}</td></tr>
-                            <tr><th>구 입 일</th><td>${item.date}</td></tr>
-                            <tr><th>상 태</th><td>${item.status}</td></tr>
-                        </table>
-                        <div class="tool-card-img-box" style="cursor: default;">
-                            ${imgTag}
+                    <div class="card-item-container" style="margin-bottom: 12px;">
+                        <div style="margin-bottom: 3px; font-size: 13px; font-weight: bold; color: #334155;">
+                            [${item.corp}] ${item.team} - 관리번호: ${item.code}
+                        </div>
+                        <div class="tool-card-wrapper">
+                            <table class="tool-card-table">
+                                <tr><th>관 리 번 호</th><td>${item.code}</td></tr>
+                                <tr><th>품 명</th><td>${item.name}</td></tr>
+                                <tr><th>규 격</th><td>${item.spec || '-'}</td></tr>
+                                <tr><th>제 조 사</th><td>${item.maker || '-'}</td></tr>
+                                <tr><th>수 량</th><td>${item.qty}</td></tr>
+                                <tr><th>구 입 일</th><td>${item.date}</td></tr>
+                                <tr><th>상 태</th><td>${item.status}</td></tr>
+                            </table>
+                            <div class="tool-card-img-box" style="cursor: default;">
+                                ${imgTag}
+                            </div>
                         </div>
                     </div>
                 `;
