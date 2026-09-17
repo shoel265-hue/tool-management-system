@@ -2407,31 +2407,63 @@
         const container = document.getElementById('all-cards-container');
 
         if (corpFilters.cards === 'LOSS') {
-            // 🛡️ 삭제된 보고서 보관함(deletedReportsList)에 있는 ID와 매칭되는 항목은 모아보기 손망실 대장에서 제외
-            let deletedRepIds = deletedReportsList.map(r => r.code);
-            let lossItems = list.filter(i => {
-                let hasValidReport = i.reportsList && i.reportsList.length > 0 && !i.reportsList.some(r => deletedRepIds.includes(r.code));
-                let hasLossFlag = (i.lossInfo && i.lossInfo.qty > 0) || i.status === '폐기' || i.status === '정상/손망실(폐기)';
-                return hasValidReport || (hasLossFlag && !deletedRepIds.includes(i.code));
+            // 🛡️ 삭제된 보고서 보관함(deletedReportsList)에 있는 ID 제외
+            let deletedRepIds = deletedReportsList.map(r => r.id);
+            let deletedCodeList = deletedReportsList.map(r => r.code);
+
+            // 모든 공기구의 reportsList에 저장된 회차별 보고서를 안전하게 수집
+            let allSavedReports = [];
+            list.forEach(item => {
+                if (item.reportsList && item.reportsList.length > 0) {
+                    item.reportsList.forEach((rep, rIdx) => {
+                        if (!deletedRepIds.includes(rep.id)) {
+                            allSavedReports.push({
+                                item: item,
+                                report: rep,
+                                reportIndex: rIdx
+                            });
+                        }
+                    });
+                } else {
+                    let hasLossFlag = (item.lossInfo && item.lossInfo.qty > 0) || item.status === '폐기' || item.status === '정상/손망실(폐기)';
+                    if (hasLossFlag && !deletedCodeList.includes(item.code)) {
+                        allSavedReports.push({
+                            item: item,
+                            report: {
+                                lossType: item.lossInfo ? item.lossInfo.type : '폐기',
+                                personName: '홍길동',
+                                managerName: '김영배',
+                                lossQty: item.qty,
+                                lossDateText: `${item.date} 발생`,
+                                printDateText: `${new Date().getFullYear()} 년 ${new Date().getMonth()+1} 월 ${new Date().getDate()} 일`,
+                                lossDesc: `관리번호 [${item.code}] ${item.name} 장비의 손망실 발생으로 인한 보고 건.`,
+                                img: item.img
+                            },
+                            reportIndex: 0
+                        });
+                    }
+                }
             });
-            
-            if (lossItems.length === 0) {
-                container.innerHTML = `<div style="padding:40px; text-align:center; color:#94a3b8; font-size:14px;">조건에 해당하는 손망실 내역이 없습니다.</div>`;
+
+            if (corpFilters.cards !== 'ALL' && corpFilters.cards !== 'LOSS') {
+                allSavedReports = allSavedReports.filter(entry => entry.item.corp === corpFilters.cards);
+            }
+
+            if (allSavedReports.length === 0) {
+                container.innerHTML = `<div style="padding:40px; text-align:center; color:#94a3b8; font-size:14px;">저장된 손망실 보고서가 없습니다. (공기구 상세 관리에서 [신규 손망실 보고서 작성] 후 저장해 주세요)</div>`;
                 return;
             }
 
-            container.innerHTML = lossItems.map((item, index) => {
-                let targetRep = (item.reportsList && item.reportsList.length > 0) ? item.reportsList[0] : null;
+            container.innerHTML = allSavedReports.map(({ item, report }) => {
+                let lossTypeStr = report.lossType || '폐기';
+                let personName = report.personName || '홍길동';
+                let managerName = report.managerName || '김영배';
+                let reportQty = report.lossQty !== undefined ? report.lossQty : item.qty;
+                let reportDateStr = report.lossDateText || `${item.date} 발생`;
+                let printDateStr = report.printDateText || `${new Date().getFullYear()} 년 ${new Date().getMonth()+1} 월 ${new Date().getDate()} 일`;
+                let lossDescText = report.lossDesc || `관리번호 [${item.code}] ${item.name} 장비의 ${lossTypeStr} 발생으로 인한 보고 건.`;
 
-                let lossTypeStr = targetRep ? targetRep.lossType : (item.lossInfo ? item.lossInfo.type : '폐기');
-                let personName = targetRep ? targetRep.personName : '홍길동';
-                let managerName = targetRep ? targetRep.managerName : '김영배';
-                let reportQty = targetRep && targetRep.lossQty !== undefined ? targetRep.lossQty : item.qty;
-                let reportDateStr = targetRep ? (targetRep.lossDateText || targetRep.date) : `${item.date} 발생`;
-                let printDateStr = targetRep ? (targetRep.printDateText || `${new Date().getFullYear()} 년 ${new Date().getMonth()+1} 월 ${new Date().getDate()} 일`) : `${new Date().getFullYear()} 년 ${new Date().getMonth()+1} 월 ${new Date().getDate()} 일`;
-                let lossDescText = targetRep && targetRep.lossDesc ? targetRep.lossDesc : `관리번호 [${item.code}] ${item.name} 장비의 ${lossTypeStr} 발생으로 인한 보고 건.`;
-
-                let activeImg = targetRep ? targetRep.img : item.img;
+                let activeImg = report.img || item.img;
                 let imgTag = activeImg ? `<img src="${activeImg}" style="max-width:100%; max-height:280px; object-fit:contain;">` : `<span style="color: #666; font-size: 12px;">[등록된 실물 사진 없음]</span>`;
 
                 return `
