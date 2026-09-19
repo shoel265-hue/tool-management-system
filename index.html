@@ -1035,14 +1035,11 @@
                     </select>
                 </div>
                 <div style="display: flex; gap: 6px;" id="cards-filter-buttons">
-                    <!-- 💡 [2번 버튼: 전체보기]: 누르면 카드가 켜지며(ON) 아태/KIFT 전체 표시 및 사진 로드 -->
-                    <button class="corp-tab-btn active" onclick="setCorpFilterAndLoadPhotos('ALL', 'cards', this)">전체보기</button>
-                    <!-- 💡 [3번 버튼: 아태보기]: 누르면 아태 전용 카드 표시 및 사진 로드 -->
-                    <button class="corp-tab-btn" onclick="setCorpFilterAndLoadPhotos('아태', 'cards', this)">🟦 아태보기</button>
-                    <!-- 💡 [4번 버튼: KIFT보기]: 누르면 KIFT 전용 카드 표시 및 사진 로드 -->
-                    <button class="corp-tab-btn" onclick="setCorpFilterAndLoadPhotos('KIFT', 'cards', this)">🟧 KIFT보기</button>
-                    <!-- 💡 [5번 버튼: 손망실 대장 보기]: 누르면 손망실 보고서 카드 표시 및 사진 로드 -->
-                    <button class="corp-tab-btn" onclick="setCorpFilterAndLoadPhotos('LOSS', 'cards', this)" style="background-color:#e11d48; color:white; border-color:#e11d48;">🛑 손망실 대장 보기</button>
+                    <!-- 💡 [모아보기 탭 전용 버튼들]: 어떤 버튼을 누르든 즉시 카드가 켜지며 해당 필터 및 사진 로드 -->
+                    <button class="corp-tab-btn active" onclick="setCardsFilterAndLoadPhotos('ALL', this)">전체보기</button>
+                    <button class="corp-tab-btn" onclick="setCardsFilterAndLoadPhotos('아태', this)">🟦 아태보기</button>
+                    <button class="corp-tab-btn" onclick="setCardsFilterAndLoadPhotos('KIFT', this)">🟧 KIFT보기</button>
+                    <button class="corp-tab-btn" onclick="setCardsFilterAndLoadPhotos('LOSS', this)" style="background-color:#e11d48; color:white; border-color:#e11d48;">🛑 손망실 대장 보기</button>
                 </div>
             </div>
 
@@ -1510,7 +1507,7 @@
 
     let isUpdatingFromRemote = false;
     let isReadOnlyHistoryMode = false;
-    let isCardsPhotoLoaded = false; // 💡 [모아보기 상태]: 기본 OFF (처음 들어오거나 다른 팀/법인 선택 시 카드 숨김)
+    let isCardsPhotoLoaded = false; // 💡 [모아보기 상태]: 기본 OFF
 
     let unsubscribeFirestoreTool = null;
 
@@ -2311,18 +2308,30 @@
         clearHistoryFilter(); renderApp();
     }
 
-    // 💡 [2번~5번 버튼 연동]: 버튼(전체보기, 아태보기, KIFT보기, 손망실대장)을 누르면 ON으로 켜지면서 사진과 함께 해당 데이터 로드
-    async function setCorpFilterAndLoadPhotos(corp, tabKey, btn) {
+    // 💡 [공기구 보유 목록 등 일반 탭 전용]: 다른 탭의 법인 필터는 순수하게 목록만 필터링하도록 분리
+    function setCorpFilter(corp, tabKey, btn) {
         corpFilters[tabKey] = corp;
         const parentDiv = btn.parentElement;
         parentDiv.querySelectorAll('.corp-tab-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
 
-        isCardsPhotoLoaded = true;
+        if (tabKey === 'inv') renderApp();
+        else if (tabKey === 'hist') renderHistory();
+        else if (tabKey === 'period') renderPeriodSearch();
+    }
+
+    // 💡 [팀별 상세카드 모아보기 전용]: 2번~5번 버튼 중 어떤 것을 누르든 카드가 켜지며(ON) 해당 필터(전체, 아태, KIFT, 손망실) 적용 및 사진 로드
+    async function setCardsFilterAndLoadPhotos(corp, btn) {
+        corpFilters.cards = corp;
+        const parentDiv = btn.parentElement;
+        parentDiv.querySelectorAll('.corp-tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        isCardsPhotoLoaded = true; // 카드를 켬
         await loadAllCardsPhotos();
     }
 
-    // 조회 팀 드롭다운 변경 시에도 카드가 보이지 않도록 숨김(OFF) 초기화
+    // 모아보기 조회 팀 드롭다운 변경 시 카드를 숨김(OFF) 초기화
     function onTeamCardsChanged() {
         isCardsPhotoLoaded = false;
         renderAllCardsTab();
@@ -2431,18 +2440,18 @@
         
         const container = document.getElementById('all-cards-container');
 
-        // 💡 [OFF 상태]: 카드를 숨기고 안내 문구 출력 (상단의 2~5번 버튼을 누르면 ON으로 바뀜)
+        // 💡 [OFF 상태]: 모아보기 진입 시 또는 팀 변경 시 카드를 숨기고 안내문구 출력
         if (!isCardsPhotoLoaded) {
             container.innerHTML = `
                 <div style="background-color: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 12px; padding: 50px 20px; text-align: center; color: #64748b; margin-top: 10px;">
                     <div style="font-size: 42px; margin-bottom: 12px;">🛡️</div>
-                    <h3 style="margin: 0 0 8px 0; font-size: 18px; color: #0f172a; border:none;">모아보기 카드 숨김 상태 </h3>
+                    <h3 style="margin: 0 0 8px 0; font-size: 18px; color: #0f172a; border:none;">모아보기 카드 숨김 상태 (읽기 한도 보호 중)</h3>
                     <p style="margin: 0 0 20px 0; font-size: 14px; line-height: 1.6;">
-                        상세 카드 및 사진 내역이 숨겨져 있습니다.</strong><br>
+                        파이어스토어 읽기 횟수 절약을 위해 <strong>상세 카드 및 사진 내역이 숨겨져 있습니다.</strong><br>
                         카드를 확인하시려면 상단의 <strong>[전체보기 / 아태보기 / KIFT보기 / 손망실 대장 보기]</strong> 버튼 중 하나를 눌러주세요.
                     </p>
-                    <button class="btn-action btn-save" style="padding: 10px 24px; font-size: 14px;" onclick="setCorpFilterAndLoadPhotos('ALL', 'cards', document.querySelector('.corp-tab-btn'))">
-                        👁️ 전체보기 켜기 (통합 로드 시작)
+                    <button class="btn-action btn-save" style="padding: 10px 24px; font-size: 14px;" onclick="setCardsFilterAndLoadPhotos('ALL', document.querySelector('#cards-filter-buttons .corp-tab-btn'))">
+                        👁️ 전체보기 켜기 (카드 및 사진 로드)
                     </button>
                 </div>
             `;
