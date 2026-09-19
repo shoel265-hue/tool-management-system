@@ -783,7 +783,7 @@
             
             <h3>🛠️ 통합 관리 안내</h3>
             <div style="background-color: #f1f5f9; padding: 15px; border-radius: 8px; border-left: 5px solid #3b82f6; font-size: 14px; line-height: 1.6;">
-                - <strong>클라우드 파이어스토어 통합 실시간 연동:</strong> 사진 데이터가 메인 문서에 함께 포함되어 조회 시 읽기 횟수가 1회로 최적화되었습니다[cite: 3].<br>
+                - <strong>클라우드 파이어스토어 실시간 연동:</strong> 다른 PC에서 추가/수정/삭제 및 이미지 등록 시 화면이 실시간으로 동기화됩니다.<br>
                 - <strong>과거 백업본 안전 조회:</strong> 백업 파일을 열면 클라우드 자동 덮어쓰기가 방지되는 [읽기 모드]로 전환되어 과거 이력을 안전하게 열람/출력할 수 있습니다.
             </div>
         </div>
@@ -1041,7 +1041,9 @@
                 </div>
             </div>
 
-            <div id="all-cards-container" style="display: flex; flex-direction: column; gap: 25px;"></div>
+            <div id="all-cards-container" style="display: flex; flex-direction: column; gap: 25px;">
+                <!-- 동적으로 생성되는 공기구 상세 카드 또는 손망실 보고서 목록 -->
+            </div>
         </div>
 
         <!-- 5. 기간별 종합 검색 -->
@@ -1247,6 +1249,7 @@
     </div>
 </div>
 
+<!-- 삭제된 이력 복원 모달 -->
 <div id="restoreModal">
     <div class="modal-content">
         <h2>🗑️ 삭제된 이력 보관함 <button class="btn-action" style="background-color:#64748b; color:white; font-size:13px;" onclick="closeRestoreModal()">✕ 닫기</button></h2>
@@ -1276,6 +1279,7 @@
     </div>
 </div>
 
+<!-- 삭제된 공기구 목록 복원 모달 -->
 <div id="invRestoreModal">
     <div class="modal-content">
         <h2>📋 삭제된 공기구 보관함 <button class="btn-action" style="background-color:#64748b; color:white; font-size:13px;" onclick="closeInvRestoreModal()">✕ 닫기</button></h2>
@@ -1305,6 +1309,7 @@
     </div>
 </div>
 
+<!-- 📑 삭제된 손망실 보고서 보관함 모달 -->
 <div id="reportRestoreModal">
     <div class="modal-content">
         <h2>📑 삭제된 손망실 보고서 보관함 <button class="btn-action" style="background-color:#64748b; color:white; font-size:13px;" onclick="closeReportRestoreModal()">✕ 닫기</button></h2>
@@ -1492,8 +1497,8 @@
     let lastActiveYear = localStorage.getItem('my_tool_multireport_year') || String(currentYear);
     
     let inventory = JSON.parse(localStorage.getItem('my_tool_multireport_data')) || [
-        { corp: '아태', team: '소방팀', code: 'TOOL-소방-아태-001', name: '충전식 드릴', spec: 'GSR 1440 - LI', qty: 2, maker: 'BOSCH', date: '2012.12.27', status: '양호', img: '', lossInfo: null, reportsList: [] },
-        { corp: 'KIFT', team: '소방팀', code: 'TOOL-소방-KIFT-001', name: '해머드릴', spec: 'HR2470', qty: 1, maker: 'MAKITA', date: '2023.05.10', status: '양호', img: '', lossInfo: null, reportsList: [] }
+        { corp: '아태', team: '소방팀', code: 'TOOL-소방-아태-001', name: '충전식 드릴', spec: 'GSR 1440 - LI', qty: 2, maker: 'BOSCH', date: '2012.12.27', status: '양호', lossInfo: null, reportsList: [] },
+        { corp: 'KIFT', team: '소방팀', code: 'TOOL-소방-KIFT-001', name: '해머드릴', spec: 'HR2470', qty: 1, maker: 'MAKITA', date: '2023.05.10', status: '양호', lossInfo: null, reportsList: [] }
     ];
     let historyLogs = JSON.parse(localStorage.getItem('my_tool_multireport_history')) || [];
     let deletedHistoryLogs = JSON.parse(localStorage.getItem('my_tool_multireport_del_hist')) || [];
@@ -1502,14 +1507,15 @@
 
     let isUpdatingFromRemote = false;
     let isReadOnlyHistoryMode = false;
+
     let unsubscribeFirestoreTool = null;
 
-    // 🛡️ [수정됨]: 사진 데이터를 메인 문서에 통합하여 1번의 Read 요청으로 동기화 (읽기 한도 초과 해결)
+    // 🛡️ [복원된 원본 방식]: 이미지를 별도 컬렉션(tool_images)에서 개별 읽어오는 방식으로 복원
     function setupToolFirestoreSync() {
         if (isReadOnlyHistoryMode) return;
         if (unsubscribeFirestoreTool) unsubscribeFirestoreTool();
 
-        unsubscribeFirestoreTool = store.collection('tool_system').doc('main_data').onSnapshot((doc) => {
+        unsubscribeFirestoreTool = store.collection('tool_system').doc('main_data').onSnapshot(async (doc) => {
             if (doc.exists && !isUpdatingFromRemote && !isReadOnlyHistoryMode) {
                 const data = doc.data();
 
@@ -1518,6 +1524,20 @@
                 deletedHistoryLogs = data.deletedHistoryLogs || [];
                 deletedInventoryItems = data.deletedInventoryItems || [];
                 deletedReportsList = data.deletedReportsList || [];
+
+                for (let item of inventory) {
+                    try {
+                        const imgDoc = await store.collection('tool_images').doc(item.code).get();
+                        if (imgDoc.exists) {
+                            item.img = imgDoc.data().img || '';
+                        } else {
+                            item.img = '';
+                        }
+                    } catch (e) {
+                        console.warn("개별 이미지 로드 실패:", e);
+                        item.img = '';
+                    }
+                }
 
                 try {
                     localStorage.setItem('my_tool_multireport_data', JSON.stringify(inventory));
@@ -1566,6 +1586,12 @@
         if (isReadOnlyHistoryMode) return;
         try {
             isUpdatingFromRemote = true;
+            
+            let cleanInventory = inventory.map(item => {
+                let copy = { ...item };
+                delete copy.img; 
+                return copy;
+            });
 
             try {
                 localStorage.setItem('my_tool_multireport_data', JSON.stringify(inventory));
@@ -1577,9 +1603,8 @@
                 console.warn("로컬 용량 초과:", e);
             }
 
-            // 🛡️ [수정됨]: 메인 문서 하나에 사진(img) 데이터가 포함된 inventory 배열을 통째로 저장하여 읽기 횟수 최소화
             await store.collection('tool_system').doc('main_data').set({
-                inventory: inventory,
+                inventory: cleanInventory,
                 historyLogs: historyLogs,
                 deletedHistoryLogs: deletedHistoryLogs,
                 deletedInventoryItems: deletedInventoryItems,
@@ -2004,9 +2029,16 @@
             const item = inventory.find(i => i.code === selectedHistoryCode);
             if (item) {
                 item.img = base64Img;
+                
+                try {
+                    await store.collection('tool_images').doc(item.code).set({ img: base64Img });
+                } catch (err) {
+                    console.error("개별 이미지 저장 실패:", err);
+                }
+
                 await saveData(); 
                 renderToolDetailCard(item);
-                alert('📸 선명한 화질의 사진이 메인 문서에 통합되어 안전하게 저장되었습니다.');
+                alert('📸 선명한 화질의 사진이 개별 클라우드 저장소에 즉시 안전하게 저장되었습니다.');
             }
         });
         event.target.value = '';
@@ -2049,9 +2081,16 @@
                             const item = inventory.find(inv => inv.code === selectedHistoryCode);
                             if (item) {
                                 item.img = base64Img;
+                                
+                                try {
+                                    await store.collection('tool_images').doc(item.code).set({ img: base64Img });
+                                } catch (err) {
+                                    console.error("개별 이미지 저장 실패:", err);
+                                }
+
                                 await saveData(); 
                                 renderToolDetailCard(item);
-                                alert('📸 클립보드 사진이 메인 문서에 통합되어 안전하게 저장되었습니다!');
+                                alert('📸 클립보드 사진이 개별 클라우드 저장소에 즉시 안전하게 저장되었습니다!');
                             }
                         }
                     });
@@ -2209,7 +2248,6 @@
                         );
 
                         if (existingIdx > -1) {
-                            const existingImg = inventory[existingIdx].img || '';
                             const existingReports = inventory[existingIdx].reportsList || [];
                             const existingLossInfo = inventory[existingIdx].lossInfo || null;
 
@@ -2218,7 +2256,6 @@
                             inventory[existingIdx].maker = maker;
                             inventory[existingIdx].date = date;
                             
-                            inventory[existingIdx].img = existingImg;
                             inventory[existingIdx].reportsList = existingReports;
                             inventory[existingIdx].lossInfo = existingLossInfo;
 
@@ -2234,7 +2271,6 @@
                                 maker: maker,
                                 date: date,
                                 status: status,
-                                img: '',
                                 lossInfo: null,
                                 reportsList: []
                             });
