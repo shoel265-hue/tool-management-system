@@ -1510,7 +1510,6 @@
 
     let unsubscribeFirestoreTool = null;
 
-    // 🛡️ [복원된 원본 방식]: 이미지를 별도 컬렉션(tool_images)에서 개별 읽어오는 방식으로 복원
     function setupToolFirestoreSync() {
         if (isReadOnlyHistoryMode) return;
         if (unsubscribeFirestoreTool) unsubscribeFirestoreTool();
@@ -1854,7 +1853,7 @@
         let maker = prompt("제조사를 입력하세요:", "힐티");
         let date = prompt("구입일자 (YYYY-MM-DD):", new Date().toISOString().split('T')[0]);
 
-        inventory.push({ corp, team, code, name: name.trim(), spec, qty, maker, date, status: '양호', img: '', lossInfo: null, reportsList: [] });
+        inventory.push({ corp, team, code, name: name.trim(), spec, qty, maker, date, status: '양호', lossInfo: null, reportsList: [] });
         await saveData(); renderApp();
         alert(`✅ 공기구가 추가되었습니다. (관리번호: ${code})`);
     }
@@ -2126,6 +2125,7 @@
 
     function checkAndUploadReportImg() { if (checkAdminRestriction()) return; document.getElementById('report-img-input').click(); }
 
+    // 🛡️ [보완 완료]: 엑셀 업로드 시 기존 등록된 사진(img)이 유실되지 않도록 기존 사진 데이터 보존 처리 추가
     function importFromExcel(event) {
         if (isReadOnlyHistoryMode) {
             alert('⚠️ 과거 백업 조회 모드에서는 엑셀 업로드가 차단됩니다.');
@@ -2248,6 +2248,7 @@
                         );
 
                         if (existingIdx > -1) {
+                            const existingImg = inventory[existingIdx].img || ''; // 🛡️ 기존 사진 데이터 백업
                             const existingReports = inventory[existingIdx].reportsList || [];
                             const existingLossInfo = inventory[existingIdx].lossInfo || null;
 
@@ -2256,6 +2257,7 @@
                             inventory[existingIdx].maker = maker;
                             inventory[existingIdx].date = date;
                             
+                            inventory[existingIdx].img = existingImg; // 🛡️ 기존 사진 데이터 복원
                             inventory[existingIdx].reportsList = existingReports;
                             inventory[existingIdx].lossInfo = existingLossInfo;
 
