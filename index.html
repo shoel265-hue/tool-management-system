@@ -783,7 +783,8 @@
             
             <h3>🛠️ 통합 관리 안내</h3>
             <div style="background-color: #f1f5f9; padding: 15px; border-radius: 8px; border-left: 5px solid #3b82f6; font-size: 14px; line-height: 1.6;">
-                - <strong>클라우드 파이어스토어 실시간 연동:</strong> 다른 PC에서 추가/수정/삭제 및 이미지 등록 시 화면이 실시간으로 동기화됩니다.<br>
+                - <strong>고화질 사진 분리 보존:</strong> 사진 데이터는 독립된 <code>tool_images</code> 공간에 고화질 원본 그대로 안전하게 보관됩니다.<br>
+                - <strong>모아보기 읽기 절약 모드:</strong> 상단의 버튼(전체보기, 아태보기, KIFT보기, 손망실 대장 보기)을 누르기 전에는 카드가 아예 숨겨져 있어 서버 읽기 횟수가 0회로 유지됩니다.<br>
                 - <strong>과거 백업본 안전 조회:</strong> 백업 파일을 열면 클라우드 자동 덮어쓰기가 방지되는 [읽기 모드]로 전환되어 과거 이력을 안전하게 열람/출력할 수 있습니다.
             </div>
         </div>
@@ -1013,15 +1014,15 @@
             <h2>
                 팀별 상세카드 모아보기 <span class="team-badge" id="cards-team-badge">전체 보기</span>
                 <div style="display: flex; gap: 6px;">
-                    <button class="btn-action btn-print" onclick="printCurrentTab('팀별 공기구 상세 관리카드 모음')">🖨️ 인쇄</button>
-                    <button class="btn-action btn-pdf" onclick="printCurrentTab('팀별 공기구 상세 관리카드 모음')">📄 PDF 저장</button>
+                    <button class="btn-action btn-print" onclick="printAllCardsWithCheck()">🖨️ 인쇄</button>
+                    <button class="btn-action btn-pdf" onclick="printAllCardsWithCheck()">📄 PDF 저장</button>
                 </div>
             </h2>
 
             <div class="corp-sub-tabs" style="background-color: #f1f5f9; padding: 12px; border-radius: 8px; border: 1px solid #cbd5e1; margin-bottom: 20px;">
                 <div>
                     🏢 <strong>출력/조회 팀 선택:</strong>
-                    <select id="filter-team-cards" class="quick-input-balanced" style="height: 38px; width: 160px;" onchange="renderAllCardsTab()">
+                    <select id="filter-team-cards" class="quick-input-balanced" style="height: 38px; width: 160px;" onchange="onTeamCardsChanged()">
                         <option value="ALL">전체 팀</option>
                         <option value="전기팀">전기팀</option>
                         <option value="소방팀">소방팀</option>
@@ -1034,16 +1035,18 @@
                     </select>
                 </div>
                 <div style="display: flex; gap: 6px;" id="cards-filter-buttons">
-                    <button class="corp-tab-btn active" onclick="setCorpFilter('ALL', 'cards', this)">전체보기</button>
-                    <button class="corp-tab-btn" onclick="setCorpFilter('아태', 'cards', this)">🟦 아태보기</button>
-                    <button class="corp-tab-btn" onclick="setCorpFilter('KIFT', 'cards', this)">🟧 KIFT보기</button>
-                    <button class="corp-tab-btn" onclick="setCorpFilter('LOSS', 'cards', this)" style="background-color:#e11d48; color:white; border-color:#e11d48;">🛑 손망실 대장 보기</button>
+                    <!-- 💡 [2번 버튼: 전체보기]: 누르면 카드가 켜지며(ON) 아태/KIFT 전체 표시 및 사진 로드 -->
+                    <button class="corp-tab-btn active" onclick="setCorpFilterAndLoadPhotos('ALL', 'cards', this)">전체보기</button>
+                    <!-- 💡 [3번 버튼: 아태보기]: 누르면 아태 전용 카드 표시 및 사진 로드 -->
+                    <button class="corp-tab-btn" onclick="setCorpFilterAndLoadPhotos('아태', 'cards', this)">🟦 아태보기</button>
+                    <!-- 💡 [4번 버튼: KIFT보기]: 누르면 KIFT 전용 카드 표시 및 사진 로드 -->
+                    <button class="corp-tab-btn" onclick="setCorpFilterAndLoadPhotos('KIFT', 'cards', this)">🟧 KIFT보기</button>
+                    <!-- 💡 [5번 버튼: 손망실 대장 보기]: 누르면 손망실 보고서 카드 표시 및 사진 로드 -->
+                    <button class="corp-tab-btn" onclick="setCorpFilterAndLoadPhotos('LOSS', 'cards', this)" style="background-color:#e11d48; color:white; border-color:#e11d48;">🛑 손망실 대장 보기</button>
                 </div>
             </div>
 
-            <div id="all-cards-container" style="display: flex; flex-direction: column; gap: 25px;">
-                <!-- 동적으로 생성되는 공기구 상세 카드 또는 손망실 보고서 목록 -->
-            </div>
+            <div id="all-cards-container" style="display: flex; flex-direction: column; gap: 25px;"></div>
         </div>
 
         <!-- 5. 기간별 종합 검색 -->
@@ -1507,6 +1510,7 @@
 
     let isUpdatingFromRemote = false;
     let isReadOnlyHistoryMode = false;
+    let isCardsPhotoLoaded = false; // 💡 [모아보기 상태]: 기본 OFF (처음 들어오거나 다른 팀/법인 선택 시 카드 숨김)
 
     let unsubscribeFirestoreTool = null;
 
@@ -1514,7 +1518,7 @@
         if (isReadOnlyHistoryMode) return;
         if (unsubscribeFirestoreTool) unsubscribeFirestoreTool();
 
-        unsubscribeFirestoreTool = store.collection('tool_system').doc('main_data').onSnapshot(async (doc) => {
+        unsubscribeFirestoreTool = store.collection('tool_system').doc('main_data').onSnapshot((doc) => {
             if (doc.exists && !isUpdatingFromRemote && !isReadOnlyHistoryMode) {
                 const data = doc.data();
 
@@ -1523,20 +1527,6 @@
                 deletedHistoryLogs = data.deletedHistoryLogs || [];
                 deletedInventoryItems = data.deletedInventoryItems || [];
                 deletedReportsList = data.deletedReportsList || [];
-
-                for (let item of inventory) {
-                    try {
-                        const imgDoc = await store.collection('tool_images').doc(item.code).get();
-                        if (imgDoc.exists) {
-                            item.img = imgDoc.data().img || '';
-                        } else {
-                            item.img = '';
-                        }
-                    } catch (e) {
-                        console.warn("개별 이미지 로드 실패:", e);
-                        item.img = '';
-                    }
-                }
 
                 try {
                     localStorage.setItem('my_tool_multireport_data', JSON.stringify(inventory));
@@ -1637,6 +1627,17 @@
         
         document.body.classList.remove('is-printing-report-modal');
         window.print();
+    }
+
+    async function printAllCardsWithCheck() {
+        if (!isCardsPhotoLoaded) {
+            if (confirm("💡 현재 모아보기 카드가 숨김(OFF) 상태입니다.\n선명한 카드와 고화질 사진을 함께 포함하여 인쇄하시겠습니까?\n\n- 확인: [전체보기]를 켠 후 인쇄\n- 취소: 인쇄 취소")) {
+                await loadAllCardsPhotos();
+            } else {
+                return;
+            }
+        }
+        printCurrentTab('팀별 공기구 상세 관리카드 모음');
     }
 
     function printLossReport() {
@@ -1985,7 +1986,7 @@
             }
         }
 
-        document.getElementById('report-type-checks').innerText = `분실( [ ${lastLossType==='분실'?'O':' '} ] ), 훼손 수리가능( [ ${lastLossType==='훼손 수리가능'?'O':' '} ] ), 훼손 수리불가능( [ ${lastLossType==='훼손 수리불가능'?'O':' '} ] ), 폐기( [ ${lastLossType==='폐기'?'O':' '} ] )`;
+        document.getElementById('report-type-checks').innerText = `분실( [ ${lastLossType==='분실'?'O':' '} ] ), 훼손 수리가능( [ ${lastLossType==='훼손 수리가능'?'O':' '} ] ), 훼손 수리불가능( [ ${lastLossType==='훼손 수리불가능'?'O':' '} ] ), 폐기( [ ${lastLossType==='폐기'||lastLossType.includes('폐기')?'O':' '} ] )`;
         document.getElementById('lossReportModal').style.display = 'flex';
     }
 
@@ -2125,7 +2126,6 @@
 
     function checkAndUploadReportImg() { if (checkAdminRestriction()) return; document.getElementById('report-img-input').click(); }
 
-    // 🛡️ [보완 완료]: 엑셀 업로드 시 기존 등록된 사진(img)이 유실되지 않도록 기존 사진 데이터 보존 처리 추가
     function importFromExcel(event) {
         if (isReadOnlyHistoryMode) {
             alert('⚠️ 과거 백업 조회 모드에서는 엑셀 업로드가 차단됩니다.');
@@ -2248,7 +2248,7 @@
                         );
 
                         if (existingIdx > -1) {
-                            const existingImg = inventory[existingIdx].img || ''; // 🛡️ 기존 사진 데이터 백업
+                            const existingImg = inventory[existingIdx].img || ''; 
                             const existingReports = inventory[existingIdx].reportsList || [];
                             const existingLossInfo = inventory[existingIdx].lossInfo || null;
 
@@ -2257,7 +2257,7 @@
                             inventory[existingIdx].maker = maker;
                             inventory[existingIdx].date = date;
                             
-                            inventory[existingIdx].img = existingImg; // 🛡️ 기존 사진 데이터 복원
+                            inventory[existingIdx].img = existingImg; 
                             inventory[existingIdx].reportsList = existingReports;
                             inventory[existingIdx].lossInfo = existingLossInfo;
 
@@ -2311,16 +2311,21 @@
         clearHistoryFilter(); renderApp();
     }
 
-    function setCorpFilter(corp, tabKey, btn) {
+    // 💡 [2번~5번 버튼 연동]: 버튼(전체보기, 아태보기, KIFT보기, 손망실대장)을 누르면 ON으로 켜지면서 사진과 함께 해당 데이터 로드
+    async function setCorpFilterAndLoadPhotos(corp, tabKey, btn) {
         corpFilters[tabKey] = corp;
         const parentDiv = btn.parentElement;
         parentDiv.querySelectorAll('.corp-tab-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
 
-        if (tabKey === 'inv') renderApp();
-        else if (tabKey === 'hist') renderHistory();
-        else if (tabKey === 'cards') renderAllCardsTab();
-        else if (tabKey === 'period') renderPeriodSearch();
+        isCardsPhotoLoaded = true;
+        await loadAllCardsPhotos();
+    }
+
+    // 조회 팀 드롭다운 변경 시에도 카드가 보이지 않도록 숨김(OFF) 초기화
+    function onTeamCardsChanged() {
+        isCardsPhotoLoaded = false;
+        renderAllCardsTab();
     }
 
     async function submitQuickTransaction() {
@@ -2344,10 +2349,20 @@
         alert('반출입/점검 내역이 등록되었습니다.');
     }
 
-    function goToHistoryOf(name, code) {
+    async function goToHistoryOf(name, code) {
         selectedHistoryCode = code;
         const item = inventory.find(i => i.code === code);
-        if (item) renderToolDetailCard(item);
+        if (item) {
+            if (!item.img) {
+                try {
+                    const imgDoc = await store.collection('tool_images').doc(item.code).get();
+                    if (imgDoc.exists) item.img = imgDoc.data().img || '';
+                } catch(e) {
+                    console.warn("개별 이미지 로드 실패:", e);
+                }
+            }
+            renderToolDetailCard(item);
+        }
         document.querySelectorAll('.sidebar .tab-link')[2].click(); renderApp();
     }
 
@@ -2385,6 +2400,30 @@
         }
     }
 
+    async function loadAllCardsPhotos() {
+        let list = inventory;
+        const activeTeam = document.getElementById('filter-team-cards').value;
+        if (activeTeam !== 'ALL') list = list.filter(i => i.team === activeTeam);
+        
+        if (corpFilters.cards !== 'ALL' && corpFilters.cards !== 'LOSS') {
+            list = list.filter(i => i.corp === corpFilters.cards);
+        }
+
+        for (let item of list) {
+            if (!item.img) {
+                try {
+                    const imgDoc = await store.collection('tool_images').doc(item.code).get();
+                    if (imgDoc.exists) item.img = imgDoc.data().img || '';
+                } catch(e) {
+                    console.warn("이미지 로드 실패:", e);
+                }
+            }
+        }
+
+        isCardsPhotoLoaded = true;
+        renderAllCardsTab();
+    }
+
     function renderAllCardsTab() {
         let list = inventory;
         const activeTeam = document.getElementById('filter-team-cards').value;
@@ -2392,6 +2431,25 @@
         
         const container = document.getElementById('all-cards-container');
 
+        // 💡 [OFF 상태]: 카드를 숨기고 안내 문구 출력 (상단의 2~5번 버튼을 누르면 ON으로 바뀜)
+        if (!isCardsPhotoLoaded) {
+            container.innerHTML = `
+                <div style="background-color: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 12px; padding: 50px 20px; text-align: center; color: #64748b; margin-top: 10px;">
+                    <div style="font-size: 42px; margin-bottom: 12px;">🛡️</div>
+                    <h3 style="margin: 0 0 8px 0; font-size: 18px; color: #0f172a; border:none;">모아보기 카드 숨김 상태 </h3>
+                    <p style="margin: 0 0 20px 0; font-size: 14px; line-height: 1.6;">
+                        상세 카드 및 사진 내역이 숨겨져 있습니다.</strong><br>
+                        카드를 확인하시려면 상단의 <strong>[전체보기 / 아태보기 / KIFT보기 / 손망실 대장 보기]</strong> 버튼 중 하나를 눌러주세요.
+                    </p>
+                    <button class="btn-action btn-save" style="padding: 10px 24px; font-size: 14px;" onclick="setCorpFilterAndLoadPhotos('ALL', 'cards', document.querySelector('.corp-tab-btn'))">
+                        👁️ 전체보기 켜기 (통합 로드 시작)
+                    </button>
+                </div>
+            `;
+            return;
+        }
+
+        // 💡 [ON 상태]: 선택된 조건에 맞게 렌더링
         if (corpFilters.cards === 'LOSS') {
             let deletedRepIds = deletedReportsList.map(r => r.id);
             let deletedCodeList = deletedReportsList.map(r => r.code);
@@ -2434,7 +2492,7 @@
             }
 
             if (allSavedReports.length === 0) {
-                container.innerHTML = `<div style="padding:40px; text-align:center; color:#94a3b8; font-size:14px;">저장된 손망실 보고서가 없습니다. (공기구 상세 관리에서 [신규 손망실 보고서 작성] 후 저장해 주세요)</div>`;
+                container.innerHTML = `<div style="padding:40px; text-align:center; color:#94a3b8; font-size:14px;">저장된 손망실 보고서가 없습니다.</div>`;
                 return;
             }
 
@@ -3079,6 +3137,12 @@
         document.getElementById(tabName).style.display = "block";
         document.getElementById(tabName).classList.add("active");
         if (evt) evt.currentTarget.classList.add("active");
+
+        // 💡 [탭 이동 시 자동 OFF]: 다른 탭으로 나갔다 오면 카드가 아예 안 보이도록 초기화
+        if (tabName !== 'AllCards') {
+            isCardsPhotoLoaded = false;
+        }
+
         if (tabName === 'AllCards') renderAllCardsTab();
         if (tabName === 'PeriodSearch') renderPeriodSearch();
     }
