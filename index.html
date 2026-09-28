@@ -1436,14 +1436,7 @@
             return;
         }
 
-        const payload = {
-            action: "save",
-            inventory: inventory,
-            historyLogs: historyLogs,
-            deletedHistoryLogs: deletedHistoryLogs,
-            deletedInventoryItems: deletedInventoryItems,
-            deletedReportsList: deletedReportsList
-        };
+        const payload = Object.assign({ action: "save" }, buildCloudPayload());
 
         try {
             await saveData();
@@ -1453,8 +1446,9 @@
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload)
             });
-            alert('💾 구글 시트에 데이터가 성공적으로 저장되었습니다.');
+            alert('💾 서버 저장 후 구글 시트로 전송 요청을 보냈습니다.\n(시트 반영 결과는 구글 시트에서 직접 확인해 주세요.)');
         } catch (error) {
+            if (error && error.isSaveError) return;
             console.error(error);
             alert('⚠️ 구글 시트 저장 중 오류가 발생했습니다.');
         }
@@ -1476,7 +1470,8 @@
             const response = await fetch(GSHEET_WEB_APP_URL + "?action=load");
             const result = await response.json();
 
-            if (result && result.inventory) {
+            if (result && Array.isArray(result.inventory)) {
+                if (!confirm(`시트 데이터: 공기구 ${result.inventory.length}건 / 이력 ${(result.historyLogs || []).length}건\n현재 서버 데이터를 이 내용으로 덮어씁니다. 계속하시겠습니까?`)) return;
                 inventory = result.inventory || [];
                 historyLogs = result.historyLogs || [];
                 deletedHistoryLogs = result.deletedHistoryLogs || [];
@@ -1486,8 +1481,11 @@
                 await saveData();
                 renderApp();
                 alert('✅ 구글 시트에서 데이터를 불러왔습니다!');
+            } else {
+                alert('⚠️ 시트에서 유효한 데이터를 받지 못했습니다.');
             }
         } catch (error) {
+            if (error && error.isSaveError) return;
             console.error(error);
             alert('⚠️ 데이터를 불러오는 중 오류가 발생했습니다.');
         }
@@ -1511,34 +1509,194 @@
 
     let unsubscribeFirestoreTool = null;
 
+    // ===== 공통 유틸 =====
+    function esc(v) {
+        return String(v === null || v === undefined ? '' : v)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+    // onclick="fn('...')" 처럼 HTML 속성 안의 JS 문자열에 넣을 때 사용
+    function jsAttr(v) {
+        return esc(String(v === null || v === undefined ? '' : v)
+            .replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\r?\n/g, ' '));
+    }
+    function localDateStr(d) {
+        return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
+    function todayStr() { return localDateStr(new Date()); }   // 한국 시간 기준 오늘 (UTC 아님)
+    function newId(prefix) { return prefix + '_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7); }
+    function imgDocId(key) { return String(key).replace(/\//g, '_'); }
+    const ALLOWED_STATUS = ['양호', '수리중', '폐기', '정상/손망실(폐기)'];
+
+    // ===== 손망실 이력 ↔ 보고서 연결 =====
+    function lossDeductQty(h) {
+        if (h && typeof h.lossQty === 'number' && h.lossQty > 0) return h.lossQty;
+        const m = h && h.worker ? String(h.worker).match(/(\d+)\s*개\s*차감/) : null;
+        return m ? parseInt(m[1], 10) : 1;
+    }
+    function allReportsFlat() {
+        const out = [];
+        inventory.forEach(it => (it.reportsList || []).forEach(r => out.push(r)));
+        deletedInventoryItems.forEach(it => (it.reportsList || []).forEach(r => out.push(r)));
+        deletedReportsList.forEach(r => out.push(r));
+        return out;
+    }
+    function pairedHistIds() {
+        const set = new Set();
+        allReportsFlat().forEach(r => { if (r.histId) set.add(r.histId); });
+        return set;
+    }
+    // 이력 h와 짝인 보고서의 위치 (histId 우선, 없으면 예전 데이터용으로 가장 최근 미연결 보고서)
+    function findReportIdx(list, h, code) {
+        let i = list.findIndex(r => r.histId && r.histId === h.id);
+        if (i > -1) return i;
+        for (let k = list.length - 1; k >= 0; k--) {
+            if (!list[k].histId && (list[k].code === undefined || list[k].code === code)) return k;
+        }
+        return -1;
+    }
+    // 보고서 rep과 짝인 손망실 이력의 위치
+    function findLossHistIdx(list, rep, code) {
+        if (rep.histId) {
+            const i = list.findIndex(h => h.id === rep.histId);
+            if (i > -1) return i;
+        }
+        const paired = pairedHistIds();
+        for (let k = list.length - 1; k >= 0; k--) {
+            const h = list[k];
+            if (h.type === '손망실' && h.code === code && !paired.has(h.id)) return k;
+        }
+        return -1;
+    }
+    function pickUnpairedLossHistId(code) {
+        const paired = pairedHistIds();
+        for (let k = historyLogs.length - 1; k >= 0; k--) {
+            const h = historyLogs[k];
+            if (h.type === '손망실' && h.code === code && !paired.has(h.id)) return h.id;
+        }
+        return null;
+    }
+
+    // ===== 사진: 문서 크기 한도(1MB) 때문에 tool_images 컬렉션에 따로 저장 =====
+    async function ensureItemImg(item) {
+        if (!item || item.img) return;
+        try {
+            const d = await store.collection('tool_images').doc(imgDocId(item.code)).get();
+            if (d.exists) item.img = d.data().img || '';
+        } catch (e) { console.warn('개별 이미지 로드 실패:', e); }
+    }
+    async function ensureReportImg(rep) {
+        if (!rep || rep.img || !rep.imgStored || !rep.id) return;
+        try {
+            const d = await store.collection('tool_images').doc(imgDocId(rep.id)).get();
+            if (d.exists) rep.img = d.data().img || '';
+        } catch (e) { console.warn('보고서 이미지 로드 실패:', e); }
+    }
+    async function persistImages() {
+        const reps = [];
+        inventory.forEach(it => (it.reportsList || []).forEach(r => reps.push(r)));
+        deletedInventoryItems.forEach(it => (it.reportsList || []).forEach(r => reps.push(r)));
+        deletedReportsList.forEach(r => reps.push(r));
+        for (const r of reps) {
+            if (r.img && !r.imgStored) {
+                if (!r.id) r.id = newId('rep');
+                await store.collection('tool_images').doc(imgDocId(r.id)).set({ img: r.img });
+                r.imgStored = true;
+            }
+        }
+        for (const it of deletedInventoryItems) {
+            if (it.img && !it.imgStored) {
+                const ref = store.collection('tool_images').doc(imgDocId(it.code));
+                const snap = await ref.get();
+                if (!snap.exists) await ref.set({ img: it.img });
+                it.imgStored = true;
+            }
+        }
+    }
+
+    // ===== 저장/동기화 (낙관적 잠금: 동시에 저장하면 나중 사람이 덮어쓰지 못하게 막음) =====
+    let localRev = null;
+    class SaveError extends Error {
+        constructor(msg) { super(msg); this.isSaveError = true; }
+    }
+    window.addEventListener('unhandledrejection', function (ev) {
+        if (ev.reason && ev.reason.isSaveError) ev.preventDefault();
+    });
+
+    function stripReport(r) { const c = Object.assign({}, r); delete c.img; return c; }
+    function stripItem(it) {
+        const c = Object.assign({}, it);
+        delete c.img;
+        c.reportsList = (it.reportsList || []).map(stripReport);
+        return c;
+    }
+    function buildCloudPayload() {
+        return {
+            inventory: inventory.map(stripItem),
+            historyLogs: historyLogs,
+            deletedHistoryLogs: deletedHistoryLogs,
+            deletedInventoryItems: deletedInventoryItems.map(stripItem),
+            deletedReportsList: deletedReportsList.map(stripReport)
+        };
+    }
+    function cacheLocally() {
+        try {
+            const p = buildCloudPayload();
+            localStorage.setItem('my_tool_multireport_data', JSON.stringify(p.inventory));
+            localStorage.setItem('my_tool_multireport_history', JSON.stringify(p.historyLogs));
+            localStorage.setItem('my_tool_multireport_del_hist', JSON.stringify(p.deletedHistoryLogs));
+            localStorage.setItem('my_tool_multireport_del_inv', JSON.stringify(p.deletedInventoryItems));
+            localStorage.setItem('my_tool_multireport_del_rep', JSON.stringify(p.deletedReportsList));
+        } catch (e) { console.warn('로컬 캐시 경고:', e); }
+    }
+    function applyRemoteData(data) {
+        const rev = data.rev || 0;
+        if (localRev !== null && rev < localRev) return;   // 오래된 스냅샷은 무시
+        const itemImgs = {}, repImgs = {};
+        const harvest = (it) => {
+            if (it.img) itemImgs[it.code] = it.img;
+            (it.reportsList || []).forEach(r => { if (r.img && r.id) repImgs[r.id] = r.img; });
+        };
+        inventory.forEach(harvest);
+        deletedInventoryItems.forEach(harvest);
+        deletedReportsList.forEach(r => { if (r.img && r.id) repImgs[r.id] = r.img; });
+
+        localRev = rev;
+        inventory = data.inventory || [];
+        historyLogs = data.historyLogs || [];
+        deletedHistoryLogs = data.deletedHistoryLogs || [];
+        deletedInventoryItems = data.deletedInventoryItems || [];
+        deletedReportsList = data.deletedReportsList || [];
+
+        const restoreImgs = (it) => {
+            if (!it.img && itemImgs[it.code]) it.img = itemImgs[it.code];
+            (it.reportsList || []).forEach(r => { if (!r.img && r.id && repImgs[r.id]) r.img = repImgs[r.id]; });
+        };
+        inventory.forEach(restoreImgs);
+        deletedInventoryItems.forEach(restoreImgs);
+        deletedReportsList.forEach(r => { if (!r.img && r.id && repImgs[r.id]) r.img = repImgs[r.id]; });
+        historyLogs.forEach(h => { if (!h.id) h.id = newId('thist'); });
+
+        cacheLocally();
+        renderApp();
+    }
+    async function reloadFromServer() {
+        try {
+            const doc = await store.collection('tool_system').doc('main_data').get({ source: 'server' });
+            if (doc.exists) applyRemoteData(doc.data()); else localRev = 0;
+        } catch (e) { console.warn('서버 재조회 실패:', e); }
+    }
+
     function setupToolFirestoreSync() {
         if (isReadOnlyHistoryMode) return;
         if (unsubscribeFirestoreTool) unsubscribeFirestoreTool();
-
+        localRev = null;
         unsubscribeFirestoreTool = store.collection('tool_system').doc('main_data').onSnapshot((doc) => {
-            if (doc.exists && !isUpdatingFromRemote && !isReadOnlyHistoryMode) {
-                const data = doc.data();
-
-                inventory = data.inventory || [];
-                historyLogs = data.historyLogs || [];
-                deletedHistoryLogs = data.deletedHistoryLogs || [];
-                deletedInventoryItems = data.deletedInventoryItems || [];
-                deletedReportsList = data.deletedReportsList || [];
-
-                try {
-                    localStorage.setItem('my_tool_multireport_data', JSON.stringify(inventory));
-                    localStorage.setItem('my_tool_multireport_history', JSON.stringify(historyLogs));
-                    localStorage.setItem('my_tool_multireport_del_hist', JSON.stringify(deletedHistoryLogs));
-                    localStorage.setItem('my_tool_multireport_del_inv', JSON.stringify(deletedInventoryItems));
-                    localStorage.setItem('my_tool_multireport_del_rep', JSON.stringify(deletedReportsList));
-                } catch (e) {
-                    console.warn("로컬 동기화 경고:", e);
-                }
-
-                renderApp();
-            }
+            if (isReadOnlyHistoryMode) return;
+            if (doc.exists) applyRemoteData(doc.data());
+            else localRev = 0;   // 서버에 아직 문서가 없음(최초 사용)
         }, (err) => {
-            console.error("파이어스토어 실시간 수신 오류:", err);
+            console.error('파이어스토어 실시간 수신 오류:', err);
         });
     }
 
@@ -1564,44 +1722,50 @@
     let lastLossType = '폐기';
     let currentReportEditIndex = null;
 
-    document.getElementById('quick-trans-date').valueAsDate = new Date();
-    document.getElementById('search-start-date').valueAsDate = new Date();
-    document.getElementById('search-end-date').valueAsDate = new Date();
+    document.getElementById('quick-trans-date').value = todayStr();
+    document.getElementById('search-start-date').value = todayStr();
+    document.getElementById('search-end-date').value = todayStr();
 
     async function saveData() {
         if (isReadOnlyHistoryMode) return;
+        cacheLocally();
+
+        if (localRev === null) {
+            alert('⏳ 서버와 아직 동기화 중입니다. 잠시 후 다시 시도해 주세요.');
+            await reloadFromServer();
+            throw new SaveError('not-synced');
+        }
+
+        const ref = store.collection('tool_system').doc('main_data');
         try {
-            isUpdatingFromRemote = true;
-            
-            let cleanInventory = inventory.map(item => {
-                let copy = { ...item };
-                delete copy.img; 
-                return copy;
-            });
-
-            try {
-                localStorage.setItem('my_tool_multireport_data', JSON.stringify(inventory));
-                localStorage.setItem('my_tool_multireport_history', JSON.stringify(historyLogs));
-                localStorage.setItem('my_tool_multireport_del_hist', JSON.stringify(deletedHistoryLogs));
-                localStorage.setItem('my_tool_multireport_del_inv', JSON.stringify(deletedInventoryItems));
-                localStorage.setItem('my_tool_multireport_del_rep', JSON.stringify(deletedReportsList));
-            } catch (e) {
-                console.warn("로컬 용량 초과:", e);
+            await persistImages();
+            const payload = buildCloudPayload();
+            const bytes = new Blob([JSON.stringify(payload)]).size;
+            if (bytes > 950000) {
+                const e = new Error('too-large'); e.code = 'too-large'; throw e;
             }
-
-            await store.collection('tool_system').doc('main_data').set({
-                inventory: cleanInventory,
-                historyLogs: historyLogs,
-                deletedHistoryLogs: deletedHistoryLogs,
-                deletedInventoryItems: deletedInventoryItems,
-                deletedReportsList: deletedReportsList,
-                updatedAt: new Date().toISOString()
+            let committedRev = null;
+            await store.runTransaction(async (tx) => {
+                const snap = await tx.get(ref);
+                const remoteRev = snap.exists ? (snap.data().rev || 0) : 0;
+                if (remoteRev !== localRev) {
+                    const err = new Error('rev-conflict'); err.code = 'rev-conflict'; throw err;
+                }
+                committedRev = remoteRev + 1;
+                tx.set(ref, Object.assign({}, payload, { updatedAt: new Date().toISOString(), rev: committedRev }));
             });
-            
-            setTimeout(() => { isUpdatingFromRemote = false; }, 1200);
+            localRev = Math.max(localRev, committedRev);
         } catch (e) {
-            isUpdatingFromRemote = false;
-            console.warn("저장 중 오류:", e);
+            if (e && e.code === 'rev-conflict') {
+                alert('⚠️ 다른 사용자가 먼저 데이터를 저장했습니다.\n방금 작업은 반영되지 않았습니다. 최신 데이터로 다시 불러왔으니 확인 후 다시 시도해 주세요.');
+                await reloadFromServer();
+            } else if (e && e.code === 'too-large') {
+                alert('❌ 데이터 용량이 서버 한도(1MB)에 가까워 저장하지 못했습니다.\n오래된 삭제 보관함 항목을 영구 삭제하거나 백업 후 정리해 주세요.');
+            } else {
+                console.error('서버 저장 실패:', e);
+                alert('❌ 서버 저장에 실패했습니다. 네트워크/권한을 확인한 뒤 다시 시도해 주세요.');
+            }
+            throw new SaveError(e && e.message);
         }
     }
 
@@ -1620,7 +1784,7 @@
     function printCurrentTab(titleText) {
         let teamLabel = currentTeamSession === 'ALL' ? '전체 (총괄 관리자)' : currentTeamSession;
         document.getElementById('print-title').innerText = `${teamLabel} - ${titleText}`;
-        document.getElementById('print-date-info').innerText = `출력일자: ${new Date().toISOString().split('T')[0]} | 접속 팀: ${teamLabel}`;
+        document.getElementById('print-date-info').innerText = `출력일자: ${todayStr()} | 접속 팀: ${teamLabel}`;
         
         document.body.classList.remove('is-printing-report-modal');
         window.print();
@@ -1664,7 +1828,7 @@
         const hasImg = document.getElementById('report-img').style.display !== 'none' ? repImgSrc : '';
 
         const reportEntry = {
-            id: 'rep_' + Date.now(),
+            id: newId('rep'),
             code: item.code,
             itemName: item.name,
             date: new Date().toLocaleDateString(),
@@ -1678,9 +1842,15 @@
             img: hasImg
         };
 
-        if (currentReportEditIndex !== null && item.reportsList[currentReportEditIndex]) {
+        const prevRep = (currentReportEditIndex !== null) ? item.reportsList[currentReportEditIndex] : null;
+        if (prevRep) {
+            reportEntry.id = prevRep.id || reportEntry.id;
+            reportEntry.histId = prevRep.histId || pickUnpairedLossHistId(item.code);
+            reportEntry.imgStored = !!(prevRep.imgStored && prevRep.img && prevRep.img === hasImg);
             item.reportsList[currentReportEditIndex] = reportEntry;
         } else {
+            reportEntry.histId = pickUnpairedLossHistId(item.code);
+            reportEntry.imgStored = false;
             item.reportsList.push(reportEntry);
         }
 
@@ -1689,7 +1859,13 @@
         alert('💾 손망실 보고서가 성공적으로 저장 및 클라우드 연동되었습니다!');
     }
 
-    function exportBackup() {
+    async function exportBackup() {
+        const scope = currentTeamSession === 'ALL' ? inventory : inventory.filter(i => i.team === currentTeamSession);
+        for (const it of scope) {
+            await ensureItemImg(it);
+            for (const r of (it.reportsList || [])) await ensureReportImg(r);
+        }
+        for (const r of deletedReportsList) await ensureReportImg(r);
         let exportData, filename;
 
         if (currentTeamSession === 'ALL') {
@@ -1703,7 +1879,7 @@
                 deletedInventoryItems: deletedInventoryItems,
                 deletedReportsList: deletedReportsList
             };
-            filename = `전체통합_공기구백업_${new Date().toISOString().split('T')[0]}.json`;
+            filename = `전체통합_공기구백업_${todayStr()}.json`;
         } else {
             exportData = {
                 type: 'TEAM_BACKUP',
@@ -1716,7 +1892,7 @@
                 deletedInventoryItems: deletedInventoryItems.filter(i => i.team === currentTeamSession),
                 deletedReportsList: deletedReportsList
             };
-            filename = `${currentTeamSession}_공기구백업_${new Date().toISOString().split('T')[0]}.json`;
+            filename = `${currentTeamSession}_공기구백업_${todayStr()}.json`;
         }
 
         const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
@@ -1807,7 +1983,7 @@
         const worksheet = XLSX.utils.json_to_sheet(excelData);
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, "공기구목록");
-        XLSX.writeFile(workbook, `공기구보유목록_${currentTeamSession}_${new Date().toISOString().split('T')[0]}.xlsx`);
+        XLSX.writeFile(workbook, `공기구보유목록_${currentTeamSession}_${todayStr()}.xlsx`);
     }
 
     function getNextAutoCode(team, corp) {
@@ -1829,29 +2005,52 @@
             alert('⚠️ 과거 백업 조회 모드에서는 추가가 차단됩니다.');
             return;
         }
-        let team = currentTeamSession === 'ALL' ? (prompt("담당 팀명을 입력하세요 (예: 소방팀, 전기팀)", "소방팀") || "소방팀") : currentTeamSession;
-        let corp = prompt("법인명을 입력하세요 (아태 또는 KIFT):", "아태") || "아태";
-        corp = corp.trim().includes('KIFT') ? 'KIFT' : '아태';
+        let team = currentTeamSession;
+        if (currentTeamSession === 'ALL') {
+            const t = prompt("담당 팀명을 입력하세요 (예: 소방팀, 전기팀)", "소방팀");
+            if (t === null) return;
+            team = t.trim();
+            if (!team) { alert('팀명을 입력해 주세요.'); return; }
+        }
+        const corpIn = prompt("법인명을 입력하세요 (아태 또는 KIFT):", "아태");
+        if (corpIn === null) return;
+        const corp = corpIn.trim().toUpperCase().includes('KIFT') ? 'KIFT' : '아태';
 
         let autoCode = getNextAutoCode(team, corp);
         let name = prompt("공기구명을 입력하세요:", "함마드릴");
-        if (!name) return;
-        
+        if (!name || !name.trim()) return;
+
         let code = prompt("관리번호를 확인/수정하세요:", autoCode);
-        if (!code) return;
+        if (!code || !code.trim()) return;
         code = code.trim();
 
+        if (code.includes('/')) {
+            alert('⚠️ 관리번호에는 "/" 문자를 사용할 수 없습니다.');
+            return;
+        }
         if (inventory.some(item => item.code === code)) {
             alert(`⚠️ 이미 존재하는 관리번호입니다: [${code}]`);
             return;
         }
+        if (deletedInventoryItems.some(item => item.code === code)) {
+            alert(`⚠️ 삭제 보관함에 같은 관리번호가 있습니다: [${code}]\n복원 시 충돌하므로 다른 번호를 사용해 주세요.`);
+            return;
+        }
 
         let spec = prompt("규격 및 사양을 입력하세요:", "220V");
-        let qty = parseInt(prompt("수량을 입력하세요:", "1")) || 1;
+        if (spec === null) return;
+        let qtyStr = prompt("수량을 입력하세요:", "1");
+        if (qtyStr === null) return;
+        if (!/^\d+$/.test(qtyStr.trim())) { alert('수량은 0 이상의 정수로 입력해 주세요.'); return; }
+        let qty = parseInt(qtyStr.trim(), 10);
         let maker = prompt("제조사를 입력하세요:", "힐티");
-        let date = prompt("구입일자 (YYYY-MM-DD):", new Date().toISOString().split('T')[0]);
+        if (maker === null) return;
+        let date = prompt("구입일자 (YYYY-MM-DD):", todayStr());
+        if (date === null) return;
+        date = date.trim();
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { alert('구입일자는 YYYY-MM-DD 형식으로 입력해 주세요.'); return; }
 
-        inventory.push({ corp, team, code, name: name.trim(), spec, qty, maker, date, status: '양호', lossInfo: null, reportsList: [] });
+        inventory.push({ corp, team, code, name: name.trim(), spec: spec.trim(), qty, maker: maker.trim(), date, status: qty === 0 ? '폐기' : '양호', lossInfo: null, reportsList: [] });
         await saveData(); renderApp();
         alert(`✅ 공기구가 추가되었습니다. (관리번호: ${code})`);
     }
@@ -1869,15 +2068,20 @@
         let newQty = prompt("수량을 수정하세요:", item.qty); if (newQty === null) return;
         let newMaker = prompt("제조사를 수정하세요:", item.maker); if (newMaker === null) return;
         let newDate = prompt("구입일자를 수정하세요:", item.date); if (newDate === null) return;
-        let newStatus = prompt("상태를 수정하세요:", item.status); if (newStatus === null) return;
+        let newStatus = prompt("상태를 수정하세요 (" + ALLOWED_STATUS.join(' / ') + "):", item.status); if (newStatus === null) return;
 
-        item.name = newName.trim(); 
-        item.spec = newSpec.trim(); 
-        item.qty = parseInt(newQty) || 0;
-        item.maker = newMaker.trim(); 
-        item.date = newDate.trim(); 
-        item.status = newStatus.trim();
-        
+        if (!newName.trim()) { alert('공기구명은 비워둘 수 없습니다.'); return; }
+        if (!/^\d+$/.test(String(newQty).trim())) { alert('수량은 0 이상의 정수로 입력해 주세요.'); return; }
+        newStatus = newStatus.trim();
+        if (!ALLOWED_STATUS.includes(newStatus)) { alert('상태는 다음 중 하나여야 합니다:\n' + ALLOWED_STATUS.join(' / ')); return; }
+
+        item.name = newName.trim();
+        item.spec = newSpec.trim();
+        item.qty = parseInt(String(newQty).trim(), 10);
+        item.maker = newMaker.trim();
+        item.date = newDate.trim();
+        item.status = newStatus;
+
         await saveData(); renderApp();
         if (selectedHistoryCode === code) renderToolDetailCard(item);
         alert('✅ 공기구 정보가 수정되었습니다.');
@@ -1904,7 +2108,7 @@
         if (!lossQtyStr) return;
         let lossQty = parseInt(lossQtyStr);
 
-        if (isNaN(lossQty) || lossQty <= 0 || lossQty > item.qty) {
+        if (!/^\d+$/.test(lossQtyStr.trim()) || lossQty <= 0 || lossQty > item.qty) {
             alert('수량을 올바르게 입력해주세요.');
             return;
         }
@@ -1913,8 +2117,9 @@
         if (item.qty <= 0) { item.qty = 0; item.status = '폐기'; }
         else { item.status = '정상/손망실(폐기)'; }
 
-        item.lossInfo = { year: new Date().getFullYear(), type: lastLossType, qty: lossQty };
-        historyLogs.push({ id: 'thist_' + Date.now(), date: new Date().toISOString().split('T')[0], corp: item.corp, team: item.team, type: '손망실', code: item.code, name: item.name, worker: `[손망실-${lastLossType}] ${lossQty}개 차감` });
+        const prevLossQty = (item.lossInfo && item.lossInfo.year === new Date().getFullYear()) ? (item.lossInfo.qty || 0) : 0;
+        item.lossInfo = { year: new Date().getFullYear(), type: lastLossType, qty: prevLossQty + lossQty };
+        historyLogs.push({ id: newId('thist'), date: todayStr(), corp: item.corp, team: item.team, type: '손망실', code: item.code, name: item.name, lossQty: lossQty, worker: `[손망실-${lastLossType}] ${lossQty}개 차감` });
 
         await saveData(); renderToolDetailCard(item); renderApp();
         alert(`🚨 [${lastLossType}] 처리되었습니다.`);
@@ -1922,10 +2127,12 @@
 
     function openLossReportModalNew() { currentReportEditIndex = null; openLossReportModalByIndex(null); }
 
-    function openLossReportModalByIndex(idx) {
+    async function openLossReportModalByIndex(idx) {
         if (!selectedHistoryCode) return;
         let item = inventory.find(i => i.code === selectedHistoryCode);
         if (!item) return;
+        await ensureItemImg(item);
+        if (idx !== null && item.reportsList && item.reportsList[idx]) await ensureReportImg(item.reportsList[idx]);
 
         document.getElementById('report-corp-name').innerText = item.corp === '아태' ? '아태산업개발주식회사' : 'KIFT 주식회사';
         document.getElementById('report-team-name').innerText = item.team;
@@ -2027,11 +2234,7 @@
             if (item) {
                 item.img = base64Img;
                 
-                try {
-                    await store.collection('tool_images').doc(item.code).set({ img: base64Img });
-                } catch (err) {
-                    console.error("개별 이미지 저장 실패:", err);
-                }
+                try { await store.collection('tool_images').doc(imgDocId(item.code)).set({ img: base64Img }); } catch (err) { console.error('개별 이미지 저장 실패:', err); alert('❌ 사진 저장에 실패했습니다. 네트워크/권한을 확인해 주세요.'); return; }
 
                 await saveData(); 
                 renderToolDetailCard(item);
@@ -2079,11 +2282,7 @@
                             if (item) {
                                 item.img = base64Img;
                                 
-                                try {
-                                    await store.collection('tool_images').doc(item.code).set({ img: base64Img });
-                                } catch (err) {
-                                    console.error("개별 이미지 저장 실패:", err);
-                                }
+                                try { await store.collection('tool_images').doc(imgDocId(item.code)).set({ img: base64Img }); } catch (err) { console.error('개별 이미지 저장 실패:', err); alert('❌ 사진 저장에 실패했습니다. 네트워크/권한을 확인해 주세요.'); return; }
 
                                 await saveData(); 
                                 renderToolDetailCard(item);
@@ -2145,11 +2344,14 @@
 
         const reader = new FileReader();
         reader.onload = async function(e) {
+            const backupInv = JSON.parse(JSON.stringify(inventory));
+            const backupLogs = JSON.parse(JSON.stringify(historyLogs));
             try {
                 const data = new Uint8Array(e.target.result);
                 const workbook = XLSX.read(data, { type: 'array', cellDates: true });
                 let totalAdded = 0;
                 let totalUpdated = 0;
+                let renamedCount = 0;
 
                 workbook.SheetNames.forEach(sheetName => {
                     if (sheetName.includes('사진')) return;
@@ -2214,14 +2416,16 @@
                         let code = noRaw ? `TOOL-${rowTeamShort}-${rowCorp}-${String(noRaw).padStart(3, '0')}` : getNextAutoCode(rowTeam, rowCorp);
 
                         let spec = String(rowData['규격'] || rowData['사양'] || rowData['규격/사양'] || '').trim();
-                        let qty = parseInt(String(rowData['수량'] || rowData['실사'] || rowData['개수'] || 1).replace(/[^0-9]/g, '')) || 1;
+                        const qtyCell = [rowData['수량'], rowData['실사'], rowData['개수']].find(v => v !== undefined && v !== null && String(v).trim() !== '');
+                        let qty = (qtyCell === undefined) ? null : parseInt(String(qtyCell).replace(/[^0-9]/g, ''), 10);
+                        if (Number.isNaN(qty)) qty = null;   // null = 엑셀에 수량 없음 (신규 1개, 기존은 유지)
                         let maker = String(rowData['제조사'] || rowData['메이커'] || rowData['제조업체'] || '국산').trim();
                         if (!maker) maker = '국산';
 
                         let dateRaw = rowData['구입일자'] || rowData['구입일'] || rowData['취득일자'] || rowData['구입년월일'] || '';
                         let date = '';
                         if (dateRaw instanceof Date) {
-                            date = dateRaw.toISOString().split('T')[0];
+                            date = localDateStr(new Date(dateRaw.getTime() + 12 * 3600 * 1000));
                         } else {
                             date = String(dateRaw).trim().substring(0, 10);
                             if (date.includes('/')) date = date.replace(/\//g, '-');
@@ -2231,7 +2435,7 @@
                             }
                         }
                         if (!date || date.length < 8) {
-                            date = new Date().toISOString().split('T')[0];
+                            date = todayStr();
                         }
 
                         let status = '양호';
@@ -2239,10 +2443,14 @@
                         if (statVal.includes('수리') || statVal.includes('중')) status = '수리중';
                         if (statVal.includes('폐기')) status = '폐기';
 
-                        const existingIdx = inventory.findIndex(item => 
-                            item.code === code || 
-                            (item.name === name && item.corp === rowCorp && item.team === rowTeam && item.spec === spec)
-                        );
+                        let existingIdx = inventory.findIndex(item => item.code === code && item.name === name);
+                        if (existingIdx === -1) {
+                            existingIdx = inventory.findIndex(item => item.name === name && item.corp === rowCorp && item.team === rowTeam && item.spec === spec);
+                        }
+                        if (existingIdx === -1 && (inventory.some(item => item.code === code) || deletedInventoryItems.some(item => item.code === code))) {
+                            code = getNextAutoCode(rowTeam, rowCorp);   // 다른 품목/삭제 보관함과 코드가 겹치면 새 코드 부여
+                            renamedCount++;
+                        }
 
                         if (existingIdx > -1) {
                             const existingImg = inventory[existingIdx].img || ''; 
@@ -2250,7 +2458,11 @@
                             const existingLossInfo = inventory[existingIdx].lossInfo || null;
 
                             inventory[existingIdx].spec = spec;
-                            inventory[existingIdx].qty = qty;
+                            if (qty !== null) {
+                                inventory[existingIdx].qty = qty;
+                                if (qty === 0) inventory[existingIdx].status = '폐기';
+                                else if (inventory[existingIdx].status === '폐기') inventory[existingIdx].status = '양호';
+                            }
                             inventory[existingIdx].maker = maker;
                             inventory[existingIdx].date = date;
                             
@@ -2266,10 +2478,10 @@
                                 code: code,
                                 name: name,
                                 spec: spec,
-                                qty: qty,
+                                qty: (qty === null ? 1 : qty),
                                 maker: maker,
                                 date: date,
-                                status: status,
+                                status: ((qty === null ? 1 : qty) === 0 ? '폐기' : status),
                                 lossInfo: null,
                                 reportsList: []
                             });
@@ -2280,10 +2492,13 @@
 
                 await saveData();
                 renderApp();
-                alert(`📊 엑셀 업로드 성공!\n- 신규 추가: ${totalAdded}개\n- 기존 업데이트: ${totalUpdated}개\n총 ${totalAdded + totalUpdated}개의 공기구가 정상 반영되었습니다.`);
+                alert(`📊 엑셀 업로드 성공!\n- 신규 추가: ${totalAdded}개\n- 기존 업데이트: ${totalUpdated}개` + (renamedCount ? `\n- 관리번호가 겹쳐 새 번호를 부여한 항목: ${renamedCount}개` : '') + `\n총 ${totalAdded + totalUpdated}개의 공기구가 정상 반영되었습니다.`);
             } catch (err) {
-                alert('엑셀 파일 읽기 오류: ' + err.message);
-                console.error(err);
+                if (!(err && err.isSaveError)) {
+                    inventory = backupInv; historyLogs = backupLogs;   // 도중 오류 시 메모리 변경분 롤백
+                    alert('엑셀 파일 읽기 오류: ' + err.message + '\n변경 내용은 반영되지 않았습니다.');
+                    console.error(err);
+                }
             }
             event.target.value = '';
         };
@@ -2350,10 +2565,13 @@
         const item = inventory.find(i => i.code === itemCode);
         if (!item) { alert('공기구를 선택하세요.'); return; }
 
-        if (type === '반출') item.status = '수리중';
-        if (type === '반납') item.status = '양호';
+        if (!date) { alert('날짜를 선택해 주세요.'); return; }
+        if (item.qty <= 0 || item.status === '폐기') { alert('⚠️ 폐기되었거나 수량이 0인 공기구는 등록할 수 없습니다.'); return; }
 
-        historyLogs.push({ id: 'thist_' + Date.now(), date, corp: item.corp, team: item.team, type, code: item.code, name: item.name, worker: worker || '현장 작업자' });
+        if (type === '반출' && item.status === '양호') item.status = '수리중';
+        if (type === '반납' && item.status === '수리중') item.status = '양호';
+
+        historyLogs.push({ id: newId('thist'), date, corp: item.corp, team: item.team, type, code: item.code, name: item.name, worker: worker || '현장 작업자' });
         await saveData(); renderApp();
         alert('반출입/점검 내역이 등록되었습니다.');
     }
@@ -2362,14 +2580,7 @@
         selectedHistoryCode = code;
         const item = inventory.find(i => i.code === code);
         if (item) {
-            if (!item.img) {
-                try {
-                    const imgDoc = await store.collection('tool_images').doc(item.code).get();
-                    if (imgDoc.exists) item.img = imgDoc.data().img || '';
-                } catch(e) {
-                    console.warn("개별 이미지 로드 실패:", e);
-                }
-            }
+            await ensureItemImg(item);
             renderToolDetailCard(item);
         }
         document.querySelectorAll('.sidebar .tab-link')[2].click(); renderApp();
@@ -2399,10 +2610,10 @@
         } else {
             reportsListContainer.innerHTML = item.reportsList.map((rep, idx) => `
                 <div style="display: flex; justify-content: space-between; align-items: center; background: white; padding: 6px 10px; border-radius: 6px; border: 1px solid #e2e8f0; font-size: 13px;">
-                    <div><strong>[제 ${idx + 1}회차 보고서]</strong> &nbsp; 작성일: ${rep.date} &nbsp;|&nbsp; 구분: <span style="color:#e11d48; font-weight:bold;">${rep.lossType}</span> &nbsp;|&nbsp; 담당자: ${rep.personName}</div>
+                    <div><strong>[제 ${idx + 1}회차 보고서]</strong> &nbsp; 작성일: ${esc(rep.date)} &nbsp;|&nbsp; 구분: <span style="color:#e11d48; font-weight:bold;">${esc(rep.lossType)}</span> &nbsp;|&nbsp; 담당자: ${esc(rep.personName)}</div>
                     <div style="display: flex; gap: 4px;">
                         <button class="btn-action" style="background-color: #0284c7; color: white; padding: 3px 8px; font-size: 11.5px;" onclick="openLossReportModalByIndex(${idx})">📄 보기/출력</button>
-                        <button class="btn-action" style="background-color: #ef4444; color: white; padding: 3px 8px; font-size: 11.5px;" onclick="deleteReportByIndex('${item.code}', ${idx})">🗑️ 삭제</button>
+                        <button class="btn-action" style="background-color: #ef4444; color: white; padding: 3px 8px; font-size: 11.5px;" onclick="deleteReportByIndex('${jsAttr(item.code)}', ${idx})">🗑️ 삭제</button>
                     </div>
                 </div>
             `).join('');
@@ -2413,19 +2624,15 @@
         let list = inventory;
         const activeTeam = document.getElementById('filter-team-cards').value;
         if (activeTeam !== 'ALL') list = list.filter(i => i.team === activeTeam);
-        
+
         if (corpFilters.cards !== 'ALL' && corpFilters.cards !== 'LOSS') {
             list = list.filter(i => i.corp === corpFilters.cards);
         }
 
         for (let item of list) {
-            if (!item.img) {
-                try {
-                    const imgDoc = await store.collection('tool_images').doc(item.code).get();
-                    if (imgDoc.exists) item.img = imgDoc.data().img || '';
-                } catch(e) {
-                    console.warn("이미지 로드 실패:", e);
-                }
+            await ensureItemImg(item);
+            if (corpFilters.cards === 'LOSS') {
+                for (const rep of (item.reportsList || [])) await ensureReportImg(rep);
             }
         }
 
@@ -2542,7 +2749,7 @@
 
                             <table class="report-header-table" style="margin-bottom: 8px;">
                                 <tr>
-                                    <td style="text-align: left; font-size: 12px;"><strong>해당 부서:</strong> ${item.team}</td>
+                                    <td style="text-align: left; font-size: 12px;"><strong>해당 부서:</strong> ${esc(item.team)}</td>
                                     <td style="text-align: right; font-size: 12px;"><strong>문서번호:</strong> ${item.team.replace('팀','')} A - ${item.code.split('-').pop()}</td>
                                 </tr>
                             </table>
@@ -2557,7 +2764,7 @@
                                 </tr>
                                 <tr>
                                     <th>발생일시</th>
-                                    <td style="text-align: left; padding-left: 15px;">${reportDateStr}</td>
+                                    <td style="text-align: left; padding-left: 15px;">${esc(reportDateStr)}</td>
                                 </tr>
                                 <tr>
                                     <th>발생장소</th>
@@ -2569,15 +2776,15 @@
                             <table class="report-content-table">
                                 <tr>
                                     <th style="width: 15%;">부 서</th>
-                                    <td style="width: 35%;">${item.team}</td>
+                                    <td style="width: 35%;">${esc(item.team)}</td>
                                     <th style="width: 15%;">직 위</th>
                                     <td style="width: 35%;">담당자 / 반장</td>
                                 </tr>
                                 <tr>
                                     <th>성 명</th>
-                                    <td>${personName}</td>
+                                    <td>${esc(personName)}</td>
                                     <th>관리책임자</th>
-                                    <td>${managerName}</td>
+                                    <td>${esc(managerName)}</td>
                                 </tr>
                             </table>
 
@@ -2594,10 +2801,10 @@
                                 </thead>
                                 <tbody>
                                     <tr>
-                                        <td>${item.code}</td>
-                                        <td>${item.name}</td>
+                                        <td>${esc(item.code)}</td>
+                                        <td>${esc(item.name)}</td>
                                         <td>${item.spec || '-'}</td>
-                                        <td>${reportQty}</td>
+                                        <td>${esc(reportQty)}</td>
                                         <td>손망실 발생</td>
                                     </tr>
                                 </tbody>
@@ -2607,7 +2814,7 @@
                             <table class="report-content-table" style="height: 240px;">
                                 <tr>
                                     <td style="width: 50%; vertical-align: top; text-align: left; padding: 12px; line-height: 1.6; font-size: 12px; white-space: pre-wrap;">
-                                        <strong>[사고 개요 및 내용]</strong><br>${lossDescText}
+                                        <strong>[사고 개요 및 내용]</strong><br>${esc(lossDescText)}
                                     </td>
                                     <td style="width: 50%; vertical-align: middle; text-align: center; padding: 6px; background: #fafafa;">
                                         ${imgTag}
@@ -2651,13 +2858,13 @@
                         </div>
                         <div class="tool-card-wrapper">
                             <table class="tool-card-table">
-                                <tr><th>관 리 번 호</th><td>${item.code}</td></tr>
-                                <tr><th>품 명</th><td>${item.name}</td></tr>
+                                <tr><th>관 리 번 호</th><td>${esc(item.code)}</td></tr>
+                                <tr><th>품 명</th><td>${esc(item.name)}</td></tr>
                                 <tr><th>규 격</th><td>${item.spec || '-'}</td></tr>
                                 <tr><th>제 조 사</th><td>${item.maker || '-'}</td></tr>
                                 <tr><th>수 량</th><td>${item.qty}</td></tr>
-                                <tr><th>구 입 일</th><td>${item.date}</td></tr>
-                                <tr><th>상 태</th><td>${item.status}</td></tr>
+                                <tr><th>구 입 일</th><td>${esc(item.date)}</td></tr>
+                                <tr><th>상 태</th><td>${esc(item.status)}</td></tr>
                             </table>
                             <div class="tool-card-img-box" style="cursor: default;">
                                 ${imgTag}
@@ -2681,14 +2888,13 @@
                 removedReport.deletedAt = new Date().toLocaleString();
                 deletedReportsList.push(removedReport);
 
-                const hIdx = historyLogs.findIndex(h => h.code === code && h.type === '손망실');
+                const hIdx = findLossHistIdx(historyLogs, removedReport, code);
                 if (hIdx > -1) {
                     const removedHist = historyLogs.splice(hIdx, 1)[0];
                     removedHist.deletedAt = new Date().toLocaleString();
                     deletedHistoryLogs.push(removedHist);
 
-                    const match = removedHist.worker ? removedHist.worker.match(/(\d+)개\s*차감/) : null;
-                    const restoredQty = match ? parseInt(match[1]) : 1;
+                    const restoredQty = lossDeductQty(removedHist);
                     item.qty += restoredQty;
                     if (item.qty > 0 && (item.status === '폐기' || item.status === '정상/손망실(폐기)')) {
                         item.status = '양호';
@@ -2735,15 +2941,14 @@
             if (h.type === '손망실') {
                 const item = inventory.find(i => i.code === h.code);
                 if (item) {
-                    const match = h.worker ? h.worker.match(/(\d+)개\s*차감/) : null;
-                    const restoredQty = match ? parseInt(match[1]) : 1;
+                    const restoredQty = lossDeductQty(h);
                     item.qty += restoredQty;
                     if (item.qty > 0 && (item.status === '폐기' || item.status === '정상/손망실(폐기)')) {
                         item.status = '양호';
                     }
 
                     if (item.reportsList && item.reportsList.length > 0) {
-                        const repIdx = item.reportsList.findIndex(r => r.code === h.code || r.lossType);
+                        const repIdx = findReportIdx(item.reportsList, h, h.code);
                         if (repIdx > -1) {
                             const removedRep = item.reportsList.splice(repIdx, 1)[0];
                             removedRep.deletedAt = new Date().toLocaleString();
@@ -2766,8 +2971,8 @@
         const tbody = document.getElementById('restore-modal-body');
         tbody.innerHTML = deletedHistoryLogs.map(h => `
             <tr>
-                <td><input type="checkbox" class="row-checkbox restore-checkbox" value="${h.id}"></td>
-                <td>${h.deletedAt}</td><td>${h.date}</td><td><span class="${h.corp==='아태'?'badge-corp-at':'badge-corp-kift'}">${h.corp}</span></td><td>${h.team}</td><td>${h.type}</td><td>${h.code}</td><td>${h.name}</td><td>${h.worker}</td>
+                <td><input type="checkbox" class="row-checkbox restore-checkbox" value="${esc(h.id)}"></td>
+                <td>${esc(h.deletedAt)}</td><td>${esc(h.date)}</td><td><span class="${h.corp==='아태'?'badge-corp-at':'badge-corp-kift'}">${esc(h.corp)}</span></td><td>${esc(h.team)}</td><td>${esc(h.type)}</td><td>${esc(h.code)}</td><td>${esc(h.name)}</td><td>${esc(h.worker)}</td>
             </tr>
         `).join('') || '<tr><td colspan="9">삭제된 이력이 없습니다.</td></tr>';
         document.getElementById('restoreModal').style.display = 'flex';
@@ -2791,13 +2996,12 @@
                 if (h.type === '손망실') {
                     const item = inventory.find(i => i.code === h.code);
                     if (item) {
-                        const match = h.worker ? h.worker.match(/(\d+)개\s*차감/) : null;
-                        const deductQty = match ? parseInt(match[1]) : 1;
+                        const deductQty = lossDeductQty(h);
                         item.qty = Math.max(0, item.qty - deductQty);
                         if (item.qty === 0) item.status = '폐기';
                         else item.status = '정상/손망실(폐기)';
 
-                        const repIdx = deletedReportsList.findIndex(r => r.code === h.code);
+                        const repIdx = findReportIdx(deletedReportsList, h, h.code);
                         if (repIdx > -1) {
                             const restoredRep = deletedReportsList.splice(repIdx, 1)[0];
                             if (!item.reportsList) item.reportsList = [];
@@ -2839,8 +3043,8 @@
         const tbody = document.getElementById('inv-restore-modal-body');
         tbody.innerHTML = deletedInventoryItems.map(i => `
             <tr>
-                <td><input type="checkbox" class="row-checkbox inv-restore-checkbox" value="${i.code}"></td>
-                <td>${i.deletedAt}</td><td><span class="${i.corp==='아태'?'badge-corp-at':'badge-corp-kift'}">${i.corp}</span></td><td>${i.team}</td><td>${i.code}</td><td>${i.name}</td><td>${i.spec}</td><td>${i.maker}</td><td>${i.status}</td>
+                <td><input type="checkbox" class="row-checkbox inv-restore-checkbox" value="${esc(i.code)}"></td>
+                <td>${esc(i.deletedAt)}</td><td><span class="${i.corp==='아태'?'badge-corp-at':'badge-corp-kift'}">${esc(i.corp)}</span></td><td>${esc(i.team)}</td><td>${esc(i.code)}</td><td>${esc(i.name)}</td><td>${esc(i.spec)}</td><td>${esc(i.maker)}</td><td>${esc(i.status)}</td>
             </tr>
         `).join('') || '<tr><td colspan="9">삭제된 공기구가 없습니다.</td></tr>';
         document.getElementById('invRestoreModal').style.display = 'flex';
@@ -2855,11 +3059,16 @@
         const selectedCbs = document.querySelectorAll('.inv-restore-checkbox:checked');
         if (selectedCbs.length === 0) { alert('복원할 항목을 선택해 주세요.'); return; }
 
+        const skippedCodes = [];
         selectedCbs.forEach(cb => {
             const idx = deletedInventoryItems.findIndex(i => i.code === cb.value);
-            if (idx > -1) inventory.push(deletedInventoryItems.splice(idx, 1)[0]);
+            if (idx > -1) {
+                if (inventory.some(i => i.code === cb.value)) { skippedCodes.push(cb.value); return; }
+                inventory.push(deletedInventoryItems.splice(idx, 1)[0]);
+            }
         });
-        await saveData(); renderApp(); closeInvRestoreModal(); alert('복원되었습니다.');
+        await saveData(); renderApp(); closeInvRestoreModal();
+        alert('복원되었습니다.' + (skippedCodes.length ? `\n\n⚠️ 같은 관리번호가 이미 목록에 있어 복원하지 않은 항목: ${skippedCodes.join(', ')}` : ''));
     }
 
     async function permanentlyDeleteSelectedInvItems() {
@@ -2881,13 +3090,13 @@
         const tbody = document.getElementById('report-restore-modal-body');
         tbody.innerHTML = deletedReportsList.map(rep => `
             <tr>
-                <td><input type="checkbox" class="row-checkbox report-restore-checkbox" value="${rep.id}"></td>
+                <td><input type="checkbox" class="row-checkbox report-restore-checkbox" value="${esc(rep.id)}"></td>
                 <td>${rep.deletedAt || '-'}</td>
-                <td>${rep.date}</td>
+                <td>${esc(rep.date)}</td>
                 <td>${rep.code || '-'}</td>
                 <td>${rep.itemName || '-'}</td>
-                <td><span style="color:#e11d48; font-weight:bold;">${rep.lossType}</span></td>
-                <td>${rep.personName}</td>
+                <td><span style="color:#e11d48; font-weight:bold;">${esc(rep.lossType)}</span></td>
+                <td>${esc(rep.personName)}</td>
             </tr>
         `).join('') || '<tr><td colspan="7" style="padding:20px; color:#94a3b8;">삭제된 손망실 보고서가 없습니다.</td></tr>';
         document.getElementById('reportRestoreModal').style.display = 'flex';
@@ -2913,13 +3122,12 @@
                     if (!item.reportsList) item.reportsList = [];
                     item.reportsList.push(restoredReport);
 
-                    const hIdx = deletedHistoryLogs.findIndex(h => h.code === restoredReport.code && h.type === '손망실');
+                    const hIdx = findLossHistIdx(deletedHistoryLogs, restoredReport, restoredReport.code);
                     if (hIdx > -1) {
                         const restoredHist = deletedHistoryLogs.splice(hIdx, 1)[0];
                         historyLogs.push(restoredHist);
 
-                        const match = restoredHist.worker ? restoredHist.worker.match(/(\d+)개\s*차감/) : null;
-                        const deductQty = match ? parseInt(match[1]) : 1;
+                        const deductQty = lossDeductQty(restoredHist);
                         item.qty = Math.max(0, item.qty - deductQty);
                         if (item.qty === 0) item.status = '폐기';
                         else item.status = '정상/손망실(폐기)';
@@ -2965,31 +3173,31 @@
 
         const tbody = document.getElementById('inventory-body');
         tbody.innerHTML = filtered.map(i => {
-            let statBadge = `<span class="status-badge status-good">${i.status}</span>`;
-            if (i.status === '수리중') statBadge = `<span class="status-badge status-repair">${i.status}</span>`;
-            else if (i.status === '폐기') statBadge = `<span class="status-badge status-disposed">${i.status}</span>`;
-            else if (i.status === '정상/손망실(폐기)') statBadge = `<span class="status-badge status-partial-loss">${i.status}</span>`;
+            let statBadge = `<span class="status-badge status-good">${esc(i.status)}</span>`;
+            if (i.status === '수리중') statBadge = `<span class="status-badge status-repair">${esc(i.status)}</span>`;
+            else if (i.status === '폐기') statBadge = `<span class="status-badge status-disposed">${esc(i.status)}</span>`;
+            else if (i.status === '정상/손망실(폐기)') statBadge = `<span class="status-badge status-partial-loss">${esc(i.status)}</span>`;
 
             let corpBadge = i.corp === '아태' ? '<span class="badge-corp-at">아태</span>' : '<span class="badge-corp-kift">KIFT</span>';
 
             return `
                 <tr>
-                    <td class="checkbox-cell"><input type="checkbox" class="row-checkbox item-checkbox" value="${i.code}"></td>
+                    <td class="checkbox-cell"><input type="checkbox" class="row-checkbox item-checkbox" value="${esc(i.code)}"></td>
                     <td>${corpBadge}</td>
-                    <td><strong>${i.team}</strong></td>
-                    <td>${i.code}</td>
+                    <td><strong>${esc(i.team)}</strong></td>
+                    <td>${esc(i.code)}</td>
                     <td style="text-align: center;">
-                        <span class="item-link" onclick="goToHistoryOf('${i.name}', '${i.code}')">${i.name}</span>
+                        <span class="item-link" onclick="goToHistoryOf('${jsAttr(i.name)}', '${jsAttr(i.code)}')">${esc(i.name)}</span>
                     </td>
-                    <td>${i.spec}</td>
+                    <td>${esc(i.spec)}</td>
                     <td>${i.qty}</td>
-                    <td>${i.maker}</td>
-                    <td>${i.date}</td>
+                    <td>${esc(i.maker)}</td>
+                    <td>${esc(i.date)}</td>
                     <td>${statBadge}</td>
                     <td class="col-action" style="padding-right: 15px;">
                         <div class="action-cell">
-                            <button class="btn-edit" onclick="editItem('${i.code}')">수정</button>
-                            <button class="btn-delete" onclick="deleteItem('${i.code}', '${i.name}')">삭제</button>
+                            <button class="btn-edit" onclick="editItem('${jsAttr(i.code)}')">수정</button>
+                            <button class="btn-delete" onclick="deleteItem('${jsAttr(i.code)}', '${jsAttr(i.name)}')">삭제</button>
                         </div>
                     </td>
                 </tr>
@@ -3001,7 +3209,7 @@
         if (selectedHistoryCode) {
             const singleItem = inventory.find(i => i.code === selectedHistoryCode);
             if (singleItem) {
-                qSelect.innerHTML = `<option value="${singleItem.code}">[${singleItem.corp}/${singleItem.team}] ${singleItem.name} (${singleItem.code})</option>`;
+                qSelect.innerHTML = `<option value="${esc(singleItem.code)}">[${esc(singleItem.corp)}/${esc(singleItem.team)}] ${esc(singleItem.name)} (${esc(singleItem.code)})</option>`;
                 qSelect.value = singleItem.code;
             } else {
                 qSelect.innerHTML = '<option>선택된 공기구 없음</option>';
@@ -3012,7 +3220,7 @@
             if (corpFilters.inv !== 'ALL') dropdownBase = dropdownBase.filter(i => i.corp === corpFilters.inv);
 
             dropdownBase.sort((a, b) => (a.code || a.name).localeCompare(b.code || b.name, undefined, { numeric: true, sensitivity: 'base' }));
-            qSelect.innerHTML = dropdownBase.map(i => `<option value="${i.code}">[${i.corp}/${i.team}] ${i.name} (${i.code})</option>`).join('') || '<option>등록된 공기구 없음</option>';
+            qSelect.innerHTML = dropdownBase.map(i => `<option value="${esc(i.code)}">[${esc(i.corp)}/${esc(i.team)}] ${esc(i.name)} (${esc(i.code)})</option>`).join('') || '<option>등록된 공기구 없음</option>';
         }
 
         document.getElementById('dash-total-items').innerText = filtered.length;
@@ -3046,10 +3254,10 @@
             let corpBadge = h.corp === '아태' ? '<span class="badge-corp-at">아태</span>' : '<span class="badge-corp-kift">KIFT</span>';
             return `
                 <tr>
-                    <td class="checkbox-cell"><input type="checkbox" class="row-checkbox history-checkbox" value="${h.id}"></td>
-                    <td>${h.date}</td><td>${corpBadge}</td><td><strong>${h.team}</strong></td><td>${badge}</td><td>${h.code}</td><td style="text-align: center; font-weight:bold;">${h.name}</td><td>${h.worker}</td>
+                    <td class="checkbox-cell"><input type="checkbox" class="row-checkbox history-checkbox" value="${esc(h.id)}"></td>
+                    <td>${esc(h.date)}</td><td>${corpBadge}</td><td><strong>${esc(h.team)}</strong></td><td>${badge}</td><td>${esc(h.code)}</td><td style="text-align: center; font-weight:bold;">${esc(h.name)}</td><td>${esc(h.worker)}</td>
                     <td class="col-action" style="padding-right: 15px;">
-                        <div class="action-cell"><button class="btn-delete" onclick="deleteHistoryItem('${h.id}')">삭제</button></div>
+                        <div class="action-cell"><button class="btn-delete" onclick="deleteHistoryItem('${jsAttr(h.id)}')">삭제</button></div>
                     </td>
                 </tr>
             `;
@@ -3076,7 +3284,7 @@
         tbody.innerHTML = filtered.map(h => {
             let corpBadge = h.corp === '아태' ? '<span class="badge-corp-at">아태</span>' : '<span class="badge-corp-kift">KIFT</span>';
             return `
-                <tr><td>${h.date}</td><td>${corpBadge}</td><td><strong>${h.team}</strong></td><td>${h.type}</td><td>${h.code}</td><td style="text-align: center; font-weight:bold;">${h.name}</td><td>${h.worker}</td></tr>
+                <tr><td>${esc(h.date)}</td><td>${corpBadge}</td><td><strong>${esc(h.team)}</strong></td><td>${esc(h.type)}</td><td>${esc(h.code)}</td><td style="text-align: center; font-weight:bold;">${esc(h.name)}</td><td>${esc(h.worker)}</td></tr>
             `;
         }).join('') || '<tr><td colspan="7" style="color:#94a3b8; padding:30px;">조회 조건을 설정한 후 검색 버튼을 눌러주세요.</td></tr>';
     }
@@ -3117,8 +3325,7 @@
                 if (h.type === '손망실') {
                     const item = inventory.find(i => i.code === h.code);
                     if (item) {
-                        const match = h.worker ? h.worker.match(/(\d+)개\s*차감/) : null;
-                        const restoredQty = match ? parseInt(match[1]) : 1;
+                        const restoredQty = lossDeductQty(h);
                         
                         item.qty += restoredQty;
                         if (item.qty > 0 && (item.status === '폐기' || item.status === '정상/손망실(폐기)')) {
@@ -3126,7 +3333,7 @@
                         }
 
                         if (item.reportsList && item.reportsList.length > 0) {
-                            const repIdx = item.reportsList.findIndex(r => r.code === h.code || r.lossType);
+                            const repIdx = findReportIdx(item.reportsList, h, h.code);
                             if (repIdx > -1) {
                                 const removedRep = item.reportsList.splice(repIdx, 1)[0];
                                 removedRep.deletedAt = new Date().toLocaleString();
