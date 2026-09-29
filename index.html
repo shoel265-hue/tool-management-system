@@ -2136,7 +2136,7 @@
 
         document.getElementById('report-corp-name').innerText = item.corp === '아태' ? '아태산업개발주식회사' : 'KIFT 주식회사';
         document.getElementById('report-team-name').innerText = item.team;
-        document.getElementById('report-doc-no').innerText = `${item.team.replace('팀','')} A - ${item.code.split('-').pop()}`;
+        document.getElementById('report-doc-no').innerText = `${item.team.replace('팀','')} ${item.corp === 'KIFT' ? 'K' : 'A'} - ${item.code.split('-').pop()}`;
         
         const defaultDateStr = `${new Date().getFullYear()}년 ${String(new Date().getMonth()+1).padStart(2,'0')}월 ${String(new Date().getDate()).padStart(2,'0')}일`;
         const defaultPrintDateStr = `${new Date().getFullYear()} 년 ${new Date().getMonth()+1} 월 ${new Date().getDate()} 일`;
@@ -2460,8 +2460,6 @@
                             inventory[existingIdx].spec = spec;
                             if (qty !== null) {
                                 inventory[existingIdx].qty = qty;
-                                if (qty === 0) inventory[existingIdx].status = '폐기';
-                                else if (inventory[existingIdx].status === '폐기') inventory[existingIdx].status = '양호';
                             }
                             inventory[existingIdx].maker = maker;
                             inventory[existingIdx].date = date;
@@ -2481,7 +2479,7 @@
                                 qty: (qty === null ? 1 : qty),
                                 maker: maker,
                                 date: date,
-                                status: ((qty === null ? 1 : qty) === 0 ? '폐기' : status),
+                                status: status,
                                 lossInfo: null,
                                 reportsList: []
                             });
@@ -2682,25 +2680,8 @@
                             });
                         }
                     });
-                } else {
-                    let hasLossFlag = (item.lossInfo && item.lossInfo.qty > 0) || item.status === '폐기' || item.status === '정상/손망실(폐기)';
-                    if (hasLossFlag && !deletedCodeList.includes(item.code)) {
-                        allSavedReports.push({
-                            item: item,
-                            report: {
-                                lossType: item.lossInfo ? item.lossInfo.type : '폐기',
-                                personName: '홍길동',
-                                managerName: '김영배',
-                                lossQty: item.qty,
-                                lossDateText: `${item.date} 발생`,
-                                printDateText: `${new Date().getFullYear()} 년 ${new Date().getMonth()+1} 월 ${new Date().getDate()} 일`,
-                                lossDesc: `관리번호 [${item.code}] ${item.name} 장비의 손망실 발생으로 인한 보고 건.`,
-                                img: item.img
-                            },
-                            reportIndex: 0
-                        });
-                    }
                 }
+                // 정식 저장된 보고서(reportsList)가 없는 품목은 손망실 대장에 표시하지 않음
             });
 
             if (corpFilters.cards !== 'ALL' && corpFilters.cards !== 'LOSS') {
@@ -2713,9 +2694,10 @@
             }
 
             container.innerHTML = allSavedReports.map(({ item, report }) => {
+                const isDraft = !report.id;   // 정식 제출 보고서(id 있음) vs 자동 생성 초안(id 없음)
                 let lossTypeStr = report.lossType || '폐기';
-                let personName = report.personName || '홍길동';
-                let managerName = report.managerName || '김영배';
+                let personName = report.personName || '';
+                let managerName = report.managerName || '';
                 let reportQty = report.lossQty !== undefined ? report.lossQty : item.qty;
                 let reportDateStr = report.lossDateText || `${item.date} 발생`;
                 let printDateStr = report.printDateText || `${new Date().getFullYear()} 년 ${new Date().getMonth()+1} 월 ${new Date().getDate()} 일`;
@@ -2731,6 +2713,7 @@
                                 <div>
                                     <span style="font-size: 12px; color: #333;">${item.corp === '아태' ? '아태산업개발주식회사' : 'KIFT 주식회사'}</span>
                                     <h2 style="margin: 4px 0 0 0; font-size: 22px; border:none; padding:0; letter-spacing: 2px; color:#000;">손 망 실 보 고 서</h2>
+                                    ${isDraft ? '<div style="margin-top:4px; font-size:12px; font-weight:bold; color:#dc2626;">⚠️ 정식 제출된 보고서가 아닙니다. 담당자/관리자 정보를 입력하고 저장해 주세요.</div>' : ''}
                                 </div>
                                 <table class="approval-box">
                                     <tr>
@@ -2750,7 +2733,7 @@
                             <table class="report-header-table" style="margin-bottom: 8px;">
                                 <tr>
                                     <td style="text-align: left; font-size: 12px;"><strong>해당 부서:</strong> ${esc(item.team)}</td>
-                                    <td style="text-align: right; font-size: 12px;"><strong>문서번호:</strong> ${item.team.replace('팀','')} A - ${item.code.split('-').pop()}</td>
+                                    <td style="text-align: right; font-size: 12px;"><strong>문서번호:</strong> ${esc(item.team.replace('팀',''))} ${item.corp === 'KIFT' ? 'K' : 'A'} - ${esc(item.code.split('-').pop())}</td>
                                 </tr>
                             </table>
 
