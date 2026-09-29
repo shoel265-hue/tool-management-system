@@ -2228,6 +2228,17 @@
         document.getElementById('lossReportModal').style.display = 'flex';
     }
 
+    async function openLossReportFromHistory(historyId) {
+        const h = historyLogs.find(x => x.id === historyId) || deletedHistoryLogs.find(x => x.id === historyId);
+        if (!h) return;
+        const item = inventory.find(i => i.code === h.code);
+        if (!item) { alert('해당 공기구를 찾을 수 없습니다. (목록에서 삭제되었을 수 있습니다)'); return; }
+        selectedHistoryCode = item.code;
+        const idx = findReportIdx(item.reportsList || [], h, h.code);
+        if (idx === -1) { alert('이 이력과 연결된 정식 보고서가 없습니다.'); return; }
+        await openLossReportModalByIndex(idx);
+    }
+
     function closeLossReportModal() { document.getElementById('lossReportModal').style.display = 'none'; }
     function checkAndUploadToolImg() { if (checkAdminRestriction()) return; document.getElementById('tool-img-input').click(); }
 
@@ -3307,8 +3318,12 @@
         const tbody = document.getElementById('period-search-body');
         tbody.innerHTML = filtered.map(h => {
             let corpBadge = h.corp === '아태' ? '<span class="badge-corp-at">아태</span>' : '<span class="badge-corp-kift">KIFT</span>';
+            let typeCell = h.type === '손망실'
+                ? `<span class="item-link" onclick="openLossReportFromHistory('${jsAttr(h.id)}')">${esc(h.type)}</span>`
+                : `<span class="item-link" onclick="goToHistoryOf('${jsAttr(h.name)}', '${jsAttr(h.code)}')">${esc(h.type)}</span>`;
+            let codeCell = `<span class="item-link" onclick="goToHistoryOf('${jsAttr(h.name)}', '${jsAttr(h.code)}')">${esc(h.code)}</span>`;
             return `
-                <tr><td>${esc(h.date)}</td><td>${corpBadge}</td><td><strong>${esc(h.team)}</strong></td><td>${esc(h.type)}</td><td>${esc(h.code)}</td><td style="text-align: center; font-weight:bold;">${esc(h.name)}</td><td>${esc(h.worker)}</td></tr>
+                <tr><td>${esc(h.date)}</td><td>${corpBadge}</td><td><strong>${esc(h.team)}</strong></td><td>${typeCell}</td><td>${codeCell}</td><td style="text-align: center; font-weight:bold;">${esc(h.name)}</td><td>${esc(h.worker)}</td></tr>
             `;
         }).join('') || '<tr><td colspan="7" style="color:#94a3b8; padding:30px;">조회 조건을 설정한 후 검색 버튼을 눌러주세요.</td></tr>';
     }
