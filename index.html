@@ -563,6 +563,9 @@
         .print-header-info { display: none; }
         .print-header-info h1 { margin: 0 0 6px 0; font-size: 20px; color: #0f172a; }
         .print-header-info p { margin: 0; font-size: 12px; color: #64748b; }
+        .print-approval-table { border-collapse: collapse !important; width: 210px !important; margin-left: auto; }
+        .print-approval-table th, .print-approval-table td { border: 1px solid #000 !important; text-align: center !important; vertical-align: middle !important; font-size: 11px !important; padding: 4px !important; }
+        .print-approval-table th { background-color: #f8fafc !important; }
 
         @media print {
             * {
@@ -581,6 +584,15 @@
             }
 
             .print-header-info {
+                display: flex !important;
+                justify-content: space-between;
+                align-items: flex-start;
+                border-bottom: 2px solid #000;
+                padding-bottom: 12px;
+                margin-bottom: 20px;
+            }
+            body.is-printing-report-modal .print-header-info,
+            body.is-printing-allcards .print-header-info {
                 display: none !important;
             }
 
@@ -641,7 +653,12 @@
             body:not(.is-printing-report-modal) .quick-transaction-bar, 
             body:not(.is-printing-report-modal) .no-print, 
             body:not(.is-printing-report-modal) #backup-readonly-banner,
-            body:not(.is-printing-report-modal) #lossReportModal {
+            body:not(.is-printing-report-modal) #lossReportModal,
+            body:not(.is-printing-report-modal) .checkbox-cell,
+            body:not(.is-printing-report-modal) .row-checkbox,
+            body:not(.is-printing-report-modal) .col-action,
+            body:not(.is-printing-report-modal) .btn-edit,
+            body:not(.is-printing-report-modal) .btn-delete {
                 display: none !important;
             }
 
@@ -762,8 +779,23 @@
 
     <div class="main-content">
         <div class="print-header-info">
-            <h1 id="print-title">현장 공기구 관리 보고서</h1>
-            <p id="print-date-info">출력일자: 2026-09-17 | 접속 팀: 전체</p>
+            <div>
+                <h1 id="print-title">현장 공기구 관리 보고서</h1>
+                <p id="print-date-info">출력일자: 2026-09-17 | 접속 팀: 전체</p>
+            </div>
+            <table class="print-approval-table">
+                <tr>
+                    <th rowspan="2" style="width: 30px; font-size: 11px;">결<br>재</th>
+                    <th style="width: 60px; height: 22px;">담당</th>
+                    <th style="width: 60px;">팀장</th>
+                    <th style="width: 60px;">소장</th>
+                </tr>
+                <tr>
+                    <td style="height: 45px;"></td>
+                    <td></td>
+                    <td></td>
+                </tr>
+            </table>
         </div>
 
         <!-- 1. 대시보드 -->
@@ -1787,6 +1819,8 @@
         document.getElementById('print-date-info').innerText = `출력일자: ${todayStr()} | 접속 팀: ${teamLabel}`;
         
         document.body.classList.remove('is-printing-report-modal');
+        // 팀별 상세카드 모아보기는 카드 자체에 제목이 있어 상단 보고서 헤더(결재란)를 표시하지 않음
+        document.body.classList.toggle('is-printing-allcards', titleText.includes('관리카드 모음'));
         window.print();
     }
 
@@ -3163,6 +3197,13 @@
 
             let corpBadge = i.corp === '아태' ? '<span class="badge-corp-at">아태</span>' : '<span class="badge-corp-kift">KIFT</span>';
 
+            let lossBadges = '';
+            if (i.reportsList && i.reportsList.length > 0) {
+                lossBadges = '<div style="margin-top:4px;">' + i.reportsList.map((r, idx) =>
+                    `<span class="status-badge status-partial-loss" style="margin-right:4px;">손망실${idx + 1}</span>`
+                ).join('') + '</div>';
+            }
+
             return `
                 <tr>
                     <td class="checkbox-cell"><input type="checkbox" class="row-checkbox item-checkbox" value="${esc(i.code)}"></td>
@@ -3176,7 +3217,7 @@
                     <td>${i.qty}</td>
                     <td>${esc(i.maker)}</td>
                     <td>${esc(i.date)}</td>
-                    <td>${statBadge}</td>
+                    <td>${statBadge}${lossBadges}</td>
                     <td class="col-action" style="padding-right: 15px;">
                         <div class="action-cell">
                             <button class="btn-edit" onclick="editItem('${jsAttr(i.code)}')">수정</button>
