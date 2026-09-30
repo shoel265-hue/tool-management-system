@@ -12,7 +12,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
-    <!-- 🛡️ 최상단 강제 보안 스크립트 -->
+    <!-- 🛡 최상단 강제 보안 스크립트 -->
     <script>
       window.addEventListener('contextmenu', function(e) {
           e.preventDefault();
@@ -313,7 +313,6 @@
             color: #475569;
         }
 
-        /* 🔘 이미지 스타일 정렬 버튼 */
         .btn-table-sort {
             display: inline-flex;
             align-items: center;
@@ -612,7 +611,6 @@
                 background: #fff !important;
             }
 
-            /* 🖨️ 정렬 버튼 출력 숨김 지정 */
             .btn-table-sort {
                 display: none !important;
             }
@@ -911,7 +909,7 @@
                         <th>
                             관리번호 
                             <button type="button" class="btn-table-sort" onclick="toggleInventorySort('code')">
-                                정결 <span id="sort-icon-code" class="sort-arrow">↕</span>
+                                정렬 <span id="sort-icon-code" class="sort-arrow">↕</span>
                             </button>
                         </th>
                         <th>공기구명 (클릭 시 상세카드)</th>
@@ -921,7 +919,7 @@
                         <th>
                             구입일자 
                             <button type="button" class="btn-table-sort" onclick="toggleInventorySort('date')">
-                                정결 <span id="sort-icon-date" class="sort-arrow">↕</span>
+                                정렬 <span id="sort-icon-date" class="sort-arrow">↕</span>
                             </button>
                         </th>
                         <th>상태</th>
@@ -1124,7 +1122,14 @@
         <!-- 5. 기간별 종합 검색 -->
         <div id="PeriodSearch" class="tab-content">
             <h2>
-                기간별 종합 검색 <span class="team-badge" id="period-team-badge">전체 보기</span>
+                <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                    <!-- 1번 위치: 타이틀 -->
+                    <span>기간별 종합 검색</span>
+                    <!-- 2번 위치: 팀 전용 뱃지 -->
+                    <span class="team-badge" id="period-team-badge">전체 보기</span>
+                    <!-- 3번 위치: 검색기간 뱃지 스타일 -->
+                    <span id="period-print-range" class="print-period-range" style="font-size: 13px; font-weight: normal; color: #0284c7; background: #e0f2fe; padding: 3px 10px; border-radius: 12px; display: none;"></span>
+                </div>
                 <div style="display: flex; gap: 6px;">
                     <button class="btn-action btn-print" onclick="printCurrentTab('기간별 종합 검색 보고서')">🖨️ 인쇄</button>
                     <button class="btn-action btn-pdf" onclick="printCurrentTab('기간별 종합 검색 보고서')">📄 PDF 저장</button>
@@ -1557,7 +1562,7 @@
                 renderApp();
                 alert('✅ 구글 시트에서 데이터를 불러왔습니다!');
             } else {
-                alert('⚠️ 시트에서 유효한 데이터를 받지 못했습니다.');
+                alert('⚠️️ 시트에서 유효한 데이터를 받지 못했습니다.');
             }
         } catch (error) {
             if (error && error.isSaveError) return;
@@ -1582,8 +1587,7 @@
     let isReadOnlyHistoryMode = false;
     let isCardsPhotoLoaded = false; 
 
-    // 🔽 [정렬 상태 추가]
-    let inventorySortColumn = null; // null: 정렬안함 / 'code' / 'date'
+    let inventorySortColumn = null; 
     let inventorySortAsc = true;      
 
     function toggleInventorySort(col) {
@@ -1594,7 +1598,7 @@
             if (inventorySortAsc) {
                 inventorySortAsc = false;
             } else {
-                inventorySortColumn = null; // 3번째 클릭 시 기본상태
+                inventorySortColumn = null; 
                 inventorySortAsc = true;
             }
         }
@@ -1617,7 +1621,6 @@
 
     let unsubscribeFirestoreTool = null;
 
-    // ===== 공통 유틸 =====
     function esc(v) {
         return String(v === null || v === undefined ? '' : v)
             .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -1635,7 +1638,6 @@
     function imgDocId(key) { return String(key).replace(/\//g, '_'); }
     const ALLOWED_STATUS = ['양호', '수리중', '폐기', '정상/손망실(폐기)'];
 
-    // ===== 손망실 이력 ↔ 보고서 연결 =====
     function lossDeductQty(h) {
         if (h && typeof h.lossQty === 'number' && h.lossQty > 0) return h.lossQty;
         const m = h && h.worker ? String(h.worker).match(/(\d+)\s*개\s*차감/) : null;
@@ -1682,7 +1684,6 @@
         return null;
     }
 
-    // ===== 사진 로드/저장 =====
     async function ensureItemImg(item) {
         if (!item || item.img) return;
         try {
@@ -1719,7 +1720,6 @@
         }
     }
 
-    // ===== 저장/동기화 =====
     let localRev = null;
     class SaveError extends Error {
         constructor(msg) { super(msg); this.isSaveError = true; }
@@ -1886,7 +1886,6 @@
         return false;
     }
 
-    // 🔽 [인쇄 및 PDF 출력 시 기간 정보 표기 수정]
     function printCurrentTab(titleText) {
         let teamLabel = currentTeamSession === 'ALL' ? '전체' : currentTeamSession;
         let documentTitleName = "";
@@ -1895,12 +1894,10 @@
         const activeTab = document.querySelector('.tab-content.active');
         const activeTabId = activeTab ? activeTab.id : '';
 
-        // 기간별 종합 검색 탭 출력 시 자재관리처럼 기간 표기 반영
         if (activeTabId === 'PeriodSearch') {
             const startDate = document.getElementById('search-start-date').value || todayStr();
             const endDate = document.getElementById('search-end-date').value || todayStr();
             documentTitleName = `${teamLabel}_기간별종합검색_${startDate}~${endDate}`;
-            printHeaderDateText = `조회기간: ${startDate} ~ ${endDate} | 출력일자: ${todayStr()} | 접속 팀: ${currentTeamSession === 'ALL' ? '전체' : currentTeamSession}`;
         } else {
             documentTitleName = `${teamLabel}_${titleText}_${todayStr()}`;
         }
@@ -3084,7 +3081,7 @@
 
     async function deleteHistoryItem(id) {
         if (isReadOnlyHistoryMode) {
-            alert('⚠️ 과거 백업 조회 모드에서는 삭제가 차단됩니다.');
+            alert('⚠️️ 과거 백업 조회 모드에서는 삭제가 차단됩니다.');
             return;
         }
         const idx = historyLogs.findIndex(h => h.id === id);
@@ -3136,7 +3133,7 @@
     
     async function restoreSelectedHistory() {
         if (isReadOnlyHistoryMode) {
-            alert('⚠️ 과거 백업 조회 모드에서는 복원이 차단됩니다.');
+            alert('⚠ 과거 백업 조회 모드에서는 복원이 차단됩니다.');
             return;
         }
         const selectedCbs = document.querySelectorAll('.restore-checkbox:checked');
@@ -3208,7 +3205,7 @@
     
     async function restoreSelectedInvItems() {
         if (isReadOnlyHistoryMode) {
-            alert('⚠️ 과거 백업 조회 모드에서는 복원이 차단됩니다.');
+            alert('⚠️️ 과거 백업 조회 모드에서는 복원이 차단됩니다.');
             return;
         }
         const selectedCbs = document.querySelectorAll('.inv-restore-checkbox:checked');
@@ -3324,7 +3321,6 @@
         const query = document.getElementById('inventory-search').value.toLowerCase();
         if (query) filtered = filtered.filter(i => i.name.toLowerCase().includes(query) || i.code.toLowerCase().includes(query));
 
-        // 정렬 조건 적용 (선택된 칼럼이 있는 경우)
         if (inventorySortColumn) {
             filtered.sort((a, b) => {
                 let valA = (a[inventorySortColumn] || '').toString();
@@ -3457,6 +3453,24 @@
         if (end) filtered = filtered.filter(h => h.date <= end);
         if (type !== 'all') filtered = filtered.filter(h => h.type === type);
         if (keyword) filtered = filtered.filter(h => h.name.toLowerCase().includes(keyword) || h.code.toLowerCase().includes(keyword));
+
+        // 3번 위치: 기간별 검색 결과 뱃지 업데이트
+        const periodRangeEl = document.getElementById('period-print-range');
+        if (periodRangeEl) {
+            if (start || end) {
+                const sFmt = start ? start.replace(/-/g, '/') : '';
+                const eFmt = end ? end.replace(/-/g, '/') : '';
+                periodRangeEl.textContent = `검색기간 ${sFmt}~${eFmt}`;
+                periodRangeEl.style.display = 'inline-block';
+            } else {
+                periodRangeEl.style.display = 'none';
+            }
+        }
+
+        // 2번 위치: 팀 뱃지 업데이트 동기화
+        const badgeText = currentTeamSession === 'ALL' && activeTeam === 'ALL' ? '전체 보기' : `${activeTeam === 'ALL' ? currentTeamSession : activeTeam} 전용`;
+        const periodTeamBadge = document.getElementById('period-team-badge');
+        if (periodTeamBadge) periodTeamBadge.innerText = badgeText;
 
         const tbody = document.getElementById('period-search-body');
         tbody.innerHTML = filtered.map(h => {
