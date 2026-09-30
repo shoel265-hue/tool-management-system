@@ -12,7 +12,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
-    <!-- 🛡️ 최상단 강제 보안 스크립트 (우클릭, F12, 소스보기 즉시 차단) -->
+    <!-- 🛡️ 최상단 강제 보안 스크립트 -->
     <script>
       window.addEventListener('contextmenu', function(e) {
           e.preventDefault();
@@ -312,6 +312,35 @@
             font-weight: bold; 
             color: #475569;
         }
+
+        /* 🔘 이미지 스타일 정렬 버튼 */
+        .btn-table-sort {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 2px;
+            background: linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%);
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            padding: 2px 8px;
+            font-size: 11px;
+            font-weight: bold;
+            color: #1e293b;
+            cursor: pointer;
+            margin-left: 6px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+            transition: all 0.15s ease;
+        }
+        .btn-table-sort:hover {
+            background: #e2e8f0;
+            border-color: #94a3b8;
+            color: #0f172a;
+        }
+        .btn-table-sort .sort-arrow {
+            color: #2563eb;
+            font-size: 10px;
+        }
+
         tbody tr:hover {
             background-color: #f8fafc;
         }
@@ -583,6 +612,11 @@
                 background: #fff !important;
             }
 
+            /* 🖨️ 정렬 버튼 출력 숨김 지정 */
+            .btn-table-sort {
+                display: none !important;
+            }
+
             .print-header-info {
                 display: flex !important;
                 justify-content: space-between;
@@ -781,7 +815,7 @@
         <div class="print-header-info">
             <div>
                 <h1 id="print-title">현장 공기구 관리 보고서</h1>
-                <p id="print-date-info">출력일자: 2026-09-17 | 접속 팀: 전체</p>
+                <p id="print-date-info">출력일자: 2026-09-30 | 접속 팀: 전체</p>
             </div>
             <table class="print-approval-table">
                 <tr>
@@ -826,7 +860,7 @@
             <h2>
                 공기구 보유 목록 <span class="team-badge" id="inv-team-badge">전체 보기</span>
                 <div style="display: flex; gap: 6px;">
-                    <button class="btn-action btn-print" onclick="printCurrentTab('공기구 보유 목록 보고서')">🖨️ 인쇄</button>
+                    <button class="btn-action btn-print" onclick="printCurrentTab('공기구 보유 목록 보고서')">🖨 인쇄</button>
                     <button class="btn-action btn-pdf" onclick="printCurrentTab('공기구 보유 목록 보고서')">📄 PDF 저장</button>
                 </div>
             </h2>
@@ -874,12 +908,22 @@
                         <th class="checkbox-cell"><input type="checkbox" id="selectAllCheckbox" class="row-checkbox" onclick="toggleAllCheckboxes(this)"></th>
                         <th>법인</th>
                         <th>담당 팀</th>
-                        <th>관리번호</th>
+                        <th>
+                            관리번호 
+                            <button type="button" class="btn-table-sort" onclick="toggleInventorySort('code')">
+                                정결 <span id="sort-icon-code" class="sort-arrow">↕</span>
+                            </button>
+                        </th>
                         <th>공기구명 (클릭 시 상세카드)</th>
                         <th>규격 / 사양</th>
                         <th>수량</th>
                         <th>제조사</th>
-                        <th>구입일자</th>
+                        <th>
+                            구입일자 
+                            <button type="button" class="btn-table-sort" onclick="toggleInventorySort('date')">
+                                정결 <span id="sort-icon-date" class="sort-arrow">↕</span>
+                            </button>
+                        </th>
                         <th>상태</th>
                         <th class="col-action" style="text-align: right; padding-right: 20px;">관리</th>
                     </tr>
@@ -1067,7 +1111,6 @@
                     </select>
                 </div>
                 <div style="display: flex; gap: 6px;" id="cards-filter-buttons">
-                    <!-- 💡 [모아보기 탭 전용 버튼들]: 어떤 버튼을 누르든 즉시 카드가 켜지며 해당 필터 및 사진 로드 -->
                     <button class="corp-tab-btn active" onclick="setCardsFilterAndLoadPhotos('ALL', this)">전체보기</button>
                     <button class="corp-tab-btn" onclick="setCardsFilterAndLoadPhotos('아태', this)">🟦 아태보기</button>
                     <button class="corp-tab-btn" onclick="setCardsFilterAndLoadPhotos('KIFT', this)">🟧 KIFT보기</button>
@@ -1193,7 +1236,7 @@
                 <tr>
                     <th>발생일시</th>
                     <td style="text-align: left; padding-left: 15px;">
-                        <input type="text" id="input-loss-date-text" value="2026년 09월 17일" style="border:none; width:100%; font-family:inherit; font-size:12px; background:transparent;">
+                        <input type="text" id="input-loss-date-text" value="2026년 09월 30일" style="border:none; width:100%; font-family:inherit; font-size:12px; background:transparent;">
                     </td>
                 </tr>
                 <tr>
@@ -1265,7 +1308,7 @@
             </div>
 
             <div style="text-align: center; margin-bottom: 25px; font-size: 12px;" id="report-print-date">
-                <input type="text" id="input-print-date-text" value="2026 년 9 월 17 일" style="border:none; text-align:center; width:220px; font-family:inherit; font-size:12px; background:transparent;">
+                <input type="text" id="input-print-date-text" value="2026 년 9 월 30 일" style="border:none; text-align:center; width:220px; font-family:inherit; font-size:12px; background:transparent;">
             </div>
 
             <div style="text-align: right; font-size: 13px; padding-right: 50px; margin-bottom: 20px;">
@@ -1411,7 +1454,7 @@
             sessionStorage.setItem('sys_authenticated', 'true');
             document.getElementById('login-overlay').style.display = 'none';
         } else {
-            alert('⚠️ 비밀번호가 올바르지 않습니다.');
+            alert('⚠ 비밀번호가 올바르지 않습니다.');
             document.getElementById('sys-pass-input').value = '';
             document.getElementById('sys-pass-input').focus();
         }
@@ -1537,7 +1580,40 @@
 
     let isUpdatingFromRemote = false;
     let isReadOnlyHistoryMode = false;
-    let isCardsPhotoLoaded = false; // 💡 [모아보기 상태]: 기본 OFF
+    let isCardsPhotoLoaded = false; 
+
+    // 🔽 [정렬 상태 추가]
+    let inventorySortColumn = null; // null: 정렬안함 / 'code' / 'date'
+    let inventorySortAsc = true;      
+
+    function toggleInventorySort(col) {
+        if (inventorySortColumn !== col) {
+            inventorySortColumn = col;
+            inventorySortAsc = true;
+        } else {
+            if (inventorySortAsc) {
+                inventorySortAsc = false;
+            } else {
+                inventorySortColumn = null; // 3번째 클릭 시 기본상태
+                inventorySortAsc = true;
+            }
+        }
+        updateSortIcons();
+        renderApp();
+    }
+
+    function updateSortIcons() {
+        const iconCode = document.getElementById('sort-icon-code');
+        const iconDate = document.getElementById('sort-icon-date');
+        if (iconCode) iconCode.innerText = '↕';
+        if (iconDate) iconDate.innerText = '↕';
+
+        if (inventorySortColumn === 'code' && iconCode) {
+            iconCode.innerText = inventorySortAsc ? '▲' : '▼';
+        } else if (inventorySortColumn === 'date' && iconDate) {
+            iconDate.innerText = inventorySortAsc ? '▲' : '▼';
+        }
+    }
 
     let unsubscribeFirestoreTool = null;
 
@@ -1547,7 +1623,6 @@
             .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
-    // onclick="fn('...')" 처럼 HTML 속성 안의 JS 문자열에 넣을 때 사용
     function jsAttr(v) {
         return esc(String(v === null || v === undefined ? '' : v)
             .replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\r?\n/g, ' '));
@@ -1555,7 +1630,7 @@
     function localDateStr(d) {
         return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
     }
-    function todayStr() { return localDateStr(new Date()); }   // 한국 시간 기준 오늘 (UTC 아님)
+    function todayStr() { return localDateStr(new Date()); }   
     function newId(prefix) { return prefix + '_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7); }
     function imgDocId(key) { return String(key).replace(/\//g, '_'); }
     const ALLOWED_STATUS = ['양호', '수리중', '폐기', '정상/손망실(폐기)'];
@@ -1578,7 +1653,6 @@
         allReportsFlat().forEach(r => { if (r.histId) set.add(r.histId); });
         return set;
     }
-    // 이력 h와 짝인 보고서의 위치 (histId 우선, 없으면 예전 데이터용으로 가장 최근 미연결 보고서)
     function findReportIdx(list, h, code) {
         let i = list.findIndex(r => r.histId && r.histId === h.id);
         if (i > -1) return i;
@@ -1587,7 +1661,6 @@
         }
         return -1;
     }
-    // 보고서 rep과 짝인 손망실 이력의 위치
     function findLossHistIdx(list, rep, code) {
         if (rep.histId) {
             const i = list.findIndex(h => h.id === rep.histId);
@@ -1609,7 +1682,7 @@
         return null;
     }
 
-    // ===== 사진: 문서 크기 한도(1MB) 때문에 tool_images 컬렉션에 따로 저장 =====
+    // ===== 사진 로드/저장 =====
     async function ensureItemImg(item) {
         if (!item || item.img) return;
         try {
@@ -1627,7 +1700,7 @@
     async function persistImages() {
         const reps = [];
         inventory.forEach(it => (it.reportsList || []).forEach(r => reps.push(r)));
-        deletedInventoryItems.forEach(it => (it.reportsList || []).forEach(r => reps.push(r)));
+        deletedInventoryItems.forEach(it => (it.reportsList || []).forEach(r => out.push(r)));
         deletedReportsList.forEach(r => reps.push(r));
         for (const r of reps) {
             if (r.img && !r.imgStored) {
@@ -1646,7 +1719,7 @@
         }
     }
 
-    // ===== 저장/동기화 (낙관적 잠금: 동시에 저장하면 나중 사람이 덮어쓰지 못하게 막음) =====
+    // ===== 저장/동기화 =====
     let localRev = null;
     class SaveError extends Error {
         constructor(msg) { super(msg); this.isSaveError = true; }
@@ -1683,7 +1756,7 @@
     }
     function applyRemoteData(data) {
         const rev = data.rev || 0;
-        if (localRev !== null && rev < localRev) return;   // 오래된 스냅샷은 무시
+        if (localRev !== null && rev < localRev) return;   
         const itemImgs = {}, repImgs = {};
         const harvest = (it) => {
             if (it.img) itemImgs[it.code] = it.img;
@@ -1726,7 +1799,7 @@
         unsubscribeFirestoreTool = store.collection('tool_system').doc('main_data').onSnapshot((doc) => {
             if (isReadOnlyHistoryMode) return;
             if (doc.exists) applyRemoteData(doc.data());
-            else localRev = 0;   // 서버에 아직 문서가 없음(최초 사용)
+            else localRev = 0;   
         }, (err) => {
             console.error('파이어스토어 실시간 수신 오류:', err);
         });
@@ -1807,21 +1880,59 @@
             return true;
         }
         if (currentTeamSession === 'ALL') {
-            alert('⚠️ 총괄 관리자 모드에서는 사진 등록이 불가합니다. 개별 팀을 선택해 주세요.');
+            alert('⚠ 총괄 관리자 모드에서는 사진 등록이 불가합니다. 개별 팀을 선택해 주세요.');
             return true;
         }
         return false;
     }
 
+    // 🔽 [인쇄 및 PDF 출력 시 기간 정보 표기 수정]
     function printCurrentTab(titleText) {
-        let teamLabel = currentTeamSession === 'ALL' ? '전체 (총괄 관리자)' : currentTeamSession;
-        document.getElementById('print-title').innerText = `${teamLabel} - ${titleText}`;
-        document.getElementById('print-date-info').innerText = `출력일자: ${todayStr()} | 접속 팀: ${teamLabel}`;
+        let teamLabel = currentTeamSession === 'ALL' ? '전체' : currentTeamSession;
+        let documentTitleName = "";
+        let printHeaderDateText = `출력일자: ${todayStr()} | 접속 팀: ${currentTeamSession === 'ALL' ? '전체 (총괄 관리자)' : currentTeamSession}`;
+
+        const activeTab = document.querySelector('.tab-content.active');
+        const activeTabId = activeTab ? activeTab.id : '';
+
+        // 기간별 종합 검색 탭 출력 시 자재관리처럼 기간 표기 반영
+        if (activeTabId === 'PeriodSearch') {
+            const startDate = document.getElementById('search-start-date').value || todayStr();
+            const endDate = document.getElementById('search-end-date').value || todayStr();
+            documentTitleName = `${teamLabel}_기간별종합검색_${startDate}~${endDate}`;
+            printHeaderDateText = `조회기간: ${startDate} ~ ${endDate} | 출력일자: ${todayStr()} | 접속 팀: ${currentTeamSession === 'ALL' ? '전체' : currentTeamSession}`;
+        } else {
+            documentTitleName = `${teamLabel}_${titleText}_${todayStr()}`;
+        }
+
+        documentTitleName = documentTitleName.replace(/[/\\?%*:|"<>]/g, '_');
+
+        document.getElementById('print-title').innerText = `${currentTeamSession === 'ALL' ? '전체 (총괄 관리자)' : currentTeamSession} - ${titleText}`;
+        document.getElementById('print-date-info').innerText = printHeaderDateText;
         
         document.body.classList.remove('is-printing-report-modal');
-        // 팀별 상세카드 모아보기는 카드 자체에 제목이 있어 상단 보고서 헤더(결재란)를 표시하지 않음
         document.body.classList.toggle('is-printing-allcards', titleText.includes('관리카드 모음'));
+
+        const originalTitle = document.title;
+        let parentOriginalTitle = "";
+        try {
+            if (window.parent && window.parent.document) {
+                parentOriginalTitle = window.parent.document.title;
+                window.parent.document.title = documentTitleName;
+            }
+        } catch(e) {}
+        document.title = documentTitleName;
+
         window.print();
+
+        setTimeout(() => {
+            document.title = originalTitle;
+            try {
+                if (window.parent && window.parent.document && parentOriginalTitle) {
+                    window.parent.document.title = parentOriginalTitle;
+                }
+            } catch(e) {}
+        }, 1000);
     }
 
     async function printAllCardsWithCheck() {
@@ -1836,9 +1947,32 @@
     }
 
     function printLossReport() {
+        let teamLabel = currentTeamSession === 'ALL' ? '전체' : currentTeamSession;
+        let codeVal = document.getElementById('report-item-code').innerText || '손망실';
+        let documentTitleName = `${teamLabel}_손망실보고서_${codeVal}_${todayStr()}`.replace(/[/\\?%*:|"<>]/g, '_');
+
+        const originalTitle = document.title;
+        let parentOriginalTitle = "";
+        try {
+            if (window.parent && window.parent.document) {
+                parentOriginalTitle = window.parent.document.title;
+                window.parent.document.title = documentTitleName;
+            }
+        } catch(e) {}
+        document.title = documentTitleName;
+
         document.body.classList.add('is-printing-report-modal');
         window.print();
         document.body.classList.remove('is-printing-report-modal');
+
+        setTimeout(() => {
+            document.title = originalTitle;
+            try {
+                if (window.parent && window.parent.document && parentOriginalTitle) {
+                    window.parent.document.title = parentOriginalTitle;
+                }
+            } catch(e) {}
+        }, 1000);
     }
 
     async function saveLossReportData() {
@@ -1984,7 +2118,7 @@
                     alert(`📂 [${targetTeam || '전체'}] 과거 백업 데이터 조회가 활성화되었습니다.\n(클라우드 덮어쓰기가 방지된 상태로 인쇄/PDF 출력이 가능합니다)`);
                 }
             } catch (err) {
-                alert('⚠️ 백업 파일을 읽는 도중 오류가 발생했습니다.');
+                alert('⚠ 백업 파일을 읽는 도중 오류가 발생했습니다.');
             }
             event.target.value = '';
         };
@@ -2463,7 +2597,7 @@
                         let spec = String(rowData['규격'] || rowData['사양'] || rowData['규격/사양'] || '').trim();
                         const qtyCell = [rowData['수량'], rowData['실사'], rowData['개수']].find(v => v !== undefined && v !== null && String(v).trim() !== '');
                         let qty = (qtyCell === undefined) ? null : parseInt(String(qtyCell).replace(/[^0-9]/g, ''), 10);
-                        if (Number.isNaN(qty)) qty = null;   // null = 엑셀에 수량 없음 (신규 1개, 기존은 유지)
+                        if (Number.isNaN(qty)) qty = null;   
                         let maker = String(rowData['제조사'] || rowData['메이커'] || rowData['제조업체'] || '국산').trim();
                         if (!maker) maker = '국산';
 
@@ -2493,7 +2627,7 @@
                             existingIdx = inventory.findIndex(item => item.name === name && item.corp === rowCorp && item.team === rowTeam && item.spec === spec);
                         }
                         if (existingIdx === -1 && (inventory.some(item => item.code === code) || deletedInventoryItems.some(item => item.code === code))) {
-                            code = getNextAutoCode(rowTeam, rowCorp);   // 다른 품목/삭제 보관함과 코드가 겹치면 새 코드 부여
+                            code = getNextAutoCode(rowTeam, rowCorp);   
                             renamedCount++;
                         }
 
@@ -2538,7 +2672,7 @@
                 alert(`📊 엑셀 업로드 성공!\n- 신규 추가: ${totalAdded}개\n- 기존 업데이트: ${totalUpdated}개` + (renamedCount ? `\n- 관리번호가 겹쳐 새 번호를 부여한 항목: ${renamedCount}개` : '') + `\n총 ${totalAdded + totalUpdated}개의 공기구가 정상 반영되었습니다.`);
             } catch (err) {
                 if (!(err && err.isSaveError)) {
-                    inventory = backupInv; historyLogs = backupLogs;   // 도중 오류 시 메모리 변경분 롤백
+                    inventory = backupInv; historyLogs = backupLogs;   
                     alert('엑셀 파일 읽기 오류: ' + err.message + '\n변경 내용은 반영되지 않았습니다.');
                     console.error(err);
                 }
@@ -2566,7 +2700,6 @@
         clearHistoryFilter(); renderApp();
     }
 
-    // 💡 [공기구 보유 목록 등 일반 탭 전용]: 다른 탭의 법인 필터는 순수하게 목록만 필터링하도록 분리
     function setCorpFilter(corp, tabKey, btn) {
         corpFilters[tabKey] = corp;
         const parentDiv = btn.parentElement;
@@ -2578,18 +2711,16 @@
         else if (tabKey === 'period') renderPeriodSearch();
     }
 
-    // 💡 [팀별 상세카드 모아보기 전용]: 2번~5번 버튼 중 어떤 것을 누르든 카드가 켜지며(ON) 해당 필터(전체, 아태, KIFT, 손망실) 적용 및 사진 로드
     async function setCardsFilterAndLoadPhotos(corp, btn) {
         corpFilters.cards = corp;
         const parentDiv = btn.parentElement;
         parentDiv.querySelectorAll('.corp-tab-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
 
-        isCardsPhotoLoaded = true; // 카드를 켬
+        isCardsPhotoLoaded = true; 
         await loadAllCardsPhotos();
     }
 
-    // 모아보기 조회 팀 드롭다운 변경 시 카드를 숨김(OFF) 초기화
     function onTeamCardsChanged() {
         isCardsPhotoLoaded = false;
         renderAllCardsTab();
@@ -2690,7 +2821,6 @@
         
         const container = document.getElementById('all-cards-container');
 
-        // 💡 [OFF 상태]: 모아보기 진입 시 또는 팀 변경 시 카드를 숨기고 안내문구 출력
         if (!isCardsPhotoLoaded) {
             container.innerHTML = `
                 <div style="background-color: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 12px; padding: 50px 20px; text-align: center; color: #64748b; margin-top: 10px;">
@@ -2708,10 +2838,8 @@
             return;
         }
 
-        // 💡 [ON 상태]: 선택된 조건에 맞게 렌더링
         if (corpFilters.cards === 'LOSS') {
             let deletedRepIds = deletedReportsList.map(r => r.id);
-            let deletedCodeList = deletedReportsList.map(r => r.code);
 
             let allSavedReports = [];
             list.forEach(item => {
@@ -2726,7 +2854,6 @@
                         }
                     });
                 }
-                // 정식 저장된 보고서(reportsList)가 없는 품목은 손망실 대장에 표시하지 않음
             });
 
             if (corpFilters.cards !== 'ALL' && corpFilters.cards !== 'LOSS') {
@@ -2739,7 +2866,7 @@
             }
 
             container.innerHTML = allSavedReports.map(({ item, report }) => {
-                const isDraft = !report.id;   // 정식 제출 보고서(id 있음) vs 자동 생성 초안(id 없음)
+                const isDraft = !report.id;   
                 let lossTypeStr = report.lossType || '폐기';
                 let personName = report.personName || '';
                 let managerName = report.managerName || '';
@@ -3197,7 +3324,23 @@
         const query = document.getElementById('inventory-search').value.toLowerCase();
         if (query) filtered = filtered.filter(i => i.name.toLowerCase().includes(query) || i.code.toLowerCase().includes(query));
 
-        filtered.sort((a, b) => (a.code || a.name).localeCompare(b.code || b.name, undefined, { numeric: true, sensitivity: 'base' }));
+        // 정렬 조건 적용 (선택된 칼럼이 있는 경우)
+        if (inventorySortColumn) {
+            filtered.sort((a, b) => {
+                let valA = (a[inventorySortColumn] || '').toString();
+                let valB = (b[inventorySortColumn] || '').toString();
+                
+                if (inventorySortColumn === 'date') {
+                    valA = valA.replace(/\./g, '-');
+                    valB = valB.replace(/\./g, '-');
+                }
+                
+                let res = valA.localeCompare(valB, undefined, { numeric: true, sensitivity: 'base' });
+                return inventorySortAsc ? res : -res;
+            });
+        }
+
+        updateSortIcons();
 
         const tbody = document.getElementById('inventory-body');
         tbody.innerHTML = filtered.map(i => {
@@ -3393,7 +3536,6 @@
         document.getElementById(tabName).classList.add("active");
         if (evt) evt.currentTarget.classList.add("active");
 
-        // 💡 [탭 이동 시 자동 OFF]: 다른 탭으로 나갔다 오면 카드가 아예 안 보이도록 초기화
         if (tabName !== 'AllCards') {
             isCardsPhotoLoaded = false;
         }
