@@ -1479,6 +1479,23 @@
             currentTeamSession = teamParam;
             const teamSelectEl = document.getElementById('current-team-select');
             if (teamSelectEl) teamSelectEl.value = teamParam;
+
+            // 팀 로그인 시 접속 팀 고정: 선택지를 해당 팀 하나로 두고 클릭/키보드 조작 차단
+            if (teamSelectEl && currentTeamSession !== 'ALL') {
+                teamSelectEl.innerHTML = '';
+                const lockedOpt = document.createElement('option');
+                lockedOpt.value = currentTeamSession;
+                lockedOpt.textContent = currentTeamSession;
+                teamSelectEl.appendChild(lockedOpt);
+                teamSelectEl.value = currentTeamSession;
+                const blockOpen = e => { e.preventDefault(); teamSelectEl.blur(); };
+                teamSelectEl.addEventListener('mousedown', blockOpen);
+                teamSelectEl.addEventListener('touchstart', blockOpen, { passive: false });
+                teamSelectEl.addEventListener('keydown', blockOpen);
+                teamSelectEl.addEventListener('focus', () => teamSelectEl.blur());
+            }
+
+
             const badgeText = currentTeamSession === 'ALL' ? '전체 보기' : `${currentTeamSession} 전용`;
             ['dash-team-badge','inv-team-badge','hist-team-badge','cards-team-badge','period-team-badge'].forEach(id => {
                 const el = document.getElementById(id);
@@ -3176,7 +3193,15 @@
         alert('손망실 이력과 연관 보고서가 함께 성공적으로 복원되었습니다.');
     }
 
+    function isTeamLogin() {
+        const t = new URLSearchParams(window.location.search).get('team');
+        const fromUrl = !!t && t.trim() !== '' && t.trim() !== 'ALL';
+        return fromUrl || (typeof currentTeamSession !== 'undefined' && currentTeamSession !== 'ALL');
+    }
+    function blockPermanentDeleteForTeam() {}
+
     async function permanentlyDeleteSelectedHistory() {
+        if (isTeamLogin()) { blockPermanentDeleteForTeam(); return; }
         const selectedCbs = document.querySelectorAll('.restore-checkbox:checked');
         if (selectedCbs.length === 0) { alert('영구 삭제할 항목을 선택해 주세요.'); return; }
 
@@ -3224,6 +3249,7 @@
     }
 
     async function permanentlyDeleteSelectedInvItems() {
+        if (isTeamLogin()) { blockPermanentDeleteForTeam(); return; }
         const selectedCbs = document.querySelectorAll('.inv-restore-checkbox:checked');
         if (selectedCbs.length === 0) { alert('영구 삭제할 항목을 선택해 주세요.'); return; }
 
@@ -3298,6 +3324,7 @@
     }
 
     async function permanentlyDeleteSelectedReports() {
+        if (isTeamLogin()) { blockPermanentDeleteForTeam(); return; }
         const selectedCbs = document.querySelectorAll('.report-restore-checkbox:checked');
         if (selectedCbs.length === 0) { alert('영구 삭제할 보고서를 선택해 주세요.'); return; }
 
