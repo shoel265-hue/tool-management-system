@@ -2247,7 +2247,12 @@
 
         let newName = prompt("공기구명을 수정하세요:", item.name); if (newName === null) return;
         let newSpec = prompt("규격/사양을 수정하세요:", item.spec); if (newSpec === null) return;
-        let newQty = prompt("수량을 수정하세요:", item.qty); if (newQty === null) return;
+        let newQty = prompt("수량을 수정하세요:", item.qty);
+        if (newQty === null) return;
+        if (currentTeamSession !== 'ALL' && String(newQty).trim() !== String(item.qty)) {
+            alert('🔒 수량은 관리자만 수정할 수 있습니다.\n수량 변경이 필요하면 관리자에게 문의하세요.');
+            newQty = String(item.qty);
+        }
         let newMaker = prompt("제조사를 수정하세요:", item.maker); if (newMaker === null) return;
         let newDate = prompt("구입일자를 수정하세요:", item.date); if (newDate === null) return;
         let newStatus = prompt("상태를 수정하세요 (" + ALLOWED_STATUS.join(' / ') + "):", item.status); if (newStatus === null) return;
