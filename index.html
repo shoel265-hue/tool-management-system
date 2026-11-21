@@ -894,7 +894,7 @@
                     <button class="btn-action btn-delete-multi" onclick="deleteSelectedItems()">🗑️ 선택 삭제</button>
                     <button class="btn-action btn-save" onclick="addNewItem()">➕ 공기구 등록</button>
                     <button class="btn-action btn-restore" onclick="openInvRestoreModal()">↺ 삭제함 복원</button>
-                    <button class="btn-action btn-excel-in" onclick="document.getElementById('excel-file-input').click()">📊 엑셀 업로드</button>
+                    <button class="btn-action btn-excel-in" onclick="if (!isTeamLogin()) document.getElementById('excel-file-input').click()">📊 엑셀 업로드</button>
                     <input type="file" id="excel-file-input" style="display:none;" accept=".xlsx, .xls" onchange="importFromExcel(event)">
                     <button class="btn-action btn-excel-out" onclick="exportToExcel()">📊 엑셀 다운로드</button>
                 </div>
@@ -2521,6 +2521,7 @@
     function checkAndUploadReportImg() { if (checkAdminRestriction()) return; document.getElementById('report-img-input').click(); }
 
     function importFromExcel(event) {
+        if (isTeamLogin()) { event.target.value = ''; return; }
         if (isReadOnlyHistoryMode) {
             alert('⚠️ 과거 백업 조회 모드에서는 엑셀 업로드가 차단됩니다.');
             return;
