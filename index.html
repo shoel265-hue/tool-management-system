@@ -3203,7 +3203,9 @@
         const fromUrl = !!t && t.trim() !== '' && t.trim() !== 'ALL';
         return fromUrl || (typeof currentTeamSession !== 'undefined' && currentTeamSession !== 'ALL');
     }
-    function blockPermanentDeleteForTeam() {}
+    function blockPermanentDeleteForTeam() {
+        alert('🔒 영구 삭제는 관리자만 할 수 있습니다.\n삭제가 필요하면 관리자에게 문의하세요.');
+    }
 
     async function permanentlyDeleteSelectedHistory() {
         if (isTeamLogin()) { blockPermanentDeleteForTeam(); return; }
